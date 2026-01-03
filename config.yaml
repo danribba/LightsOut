@@ -1,0 +1,43 @@
+# LightsOut Hue Analyzer Configuration
+
+hue:
+  # Bridge IP address (will be auto-discovered if empty)
+  bridge_ip: ""
+  # Polling interval in seconds (how often to check light states)
+  poll_interval: 10
+  # Minimum state change duration to log (seconds)
+  min_state_duration: 5
+
+storage:
+  # SQLite database path
+  database_path: "data/hue_events.db"
+  # How long to keep raw events (days)
+  retention_days: 90
+
+analyzer:
+  # Minimum occurrences to consider a pattern
+  min_pattern_occurrences: 3
+  # Time window for pattern matching (minutes)
+  time_window_minutes: 15
+  # Confidence threshold for predictions (0.0-1.0)
+  confidence_threshold: 0.7
+  # Days of data to analyze for patterns
+  analysis_window_days: 30
+
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR
+  level: "INFO"
+  # Log file path
+  file_path: "logs/hue_analyzer.log"
+  # Max log file size in MB
+  max_size_mb: 10
+  # Number of backup files to keep
+  backup_count: 5
+
+automation:
+  # Enable automatic scene application
+  enabled: false
+  # Dry run mode (log actions without executing)
+  dry_run: true
+  # Minimum confidence to trigger automation
+  min_confidence: 0.85
