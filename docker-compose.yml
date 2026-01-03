@@ -1,0 +1,12 @@
+services:
+  hue-analyzer:
+    build: .
+    container_name: lightsout-hue-analyzer
+    restart: unless-stopped
+    network_mode: host  # Required to discover Hue Bridge on local network
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./config.yaml:/app/config.yaml:ro
+    environment:
+      - TZ=Europe/Stockholm

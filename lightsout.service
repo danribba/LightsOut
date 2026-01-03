@@ -1,0 +1,25 @@
+[Unit]
+Description=LightsOut Hue Analyzer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/LightsOut
+ExecStart=/home/pi/LightsOut/venv/bin/python main.py
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/pi/LightsOut/data /home/pi/LightsOut/logs
+
+[Install]
+WantedBy=multi-user.target
