@@ -16,6 +16,7 @@ from src.storage.database import Database
 from src.storage.event_logger import EventLogger
 from src.analyzer.pattern_detector import PatternDetector
 from src.analyzer.predictor import LightingPredictor
+from src.api.server import APIServer
 
 
 class HueAnalyzerService:
@@ -46,6 +47,9 @@ class HueAnalyzerService:
             min_confidence=self.config["automation"]["min_confidence"],
         )
 
+        # API server (initialized after bridge connects)
+        self.api_server: Optional[APIServer] = None
+
         self.scheduler = BackgroundScheduler()
         self._running = False
 
@@ -72,6 +76,7 @@ class HueAnalyzerService:
             },
             "logging": {"level": "INFO", "file_path": "logs/hue_analyzer.log"},
             "automation": {"enabled": False, "dry_run": True, "min_confidence": 0.85},
+            "api": {"enabled": True, "host": "0.0.0.0", "port": 5000},
         }
 
     def _setup_logging(self):
@@ -139,6 +144,18 @@ class HueAnalyzerService:
 
         self.scheduler.start()
         self._running = True
+
+        # Start API server if enabled
+        api_config = self.config.get("api", {})
+        if api_config.get("enabled", True):
+            self.api_server = APIServer(
+                database=self.database,
+                bridge=self.bridge,
+                pattern_detector=self.pattern_detector,
+                host=api_config.get("host", "0.0.0.0"),
+                port=api_config.get("port", 5000),
+            )
+            self.api_server.start()
 
         logger.info(f"✅ Service started. Polling every {poll_interval}s")
         self._print_status()

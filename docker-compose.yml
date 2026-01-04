@@ -3,7 +3,9 @@ services:
     build: .
     container_name: lightsout-hue-analyzer
     restart: unless-stopped
-    network_mode: host  # Required to discover Hue Bridge on local network
+    # host networking required to discover Hue Bridge on local network
+    # API available on port 5000 (configurable in config.yaml)
+    network_mode: host
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs

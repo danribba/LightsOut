@@ -22,3 +22,7 @@ loguru==0.7.2
 
 # HTTP requests (backup for Hue API)
 requests==2.31.0
+
+# REST API
+flask==3.0.0
+flask-cors==4.0.0

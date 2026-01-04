@@ -53,6 +53,8 @@ HueBridge → EventLogger → Database → PatternDetector → LightingPredictor
 
 - `src/analyzer/predictor.py` - Uses detected patterns to predict actions and trigger automations.
 
+- `src/api/server.py` - Flask REST API for remote access. Runs in background thread on port 5000.
+
 ## Configuration
 
 All settings in `config.yaml`. Key sections:
@@ -103,3 +105,20 @@ sudo systemctl restart lightsout
 ```
 
 Adjust `WorkingDirectory` and `User` in `lightsout.service` if not using default pi user.
+
+## REST API
+
+API runs on port 5000 by default (configurable in `config.yaml`).
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/health` | GET | Health check |
+| `/api/status` | GET | System status and statistics |
+| `/api/lights` | GET | Current state of all lights |
+| `/api/rooms` | GET | All rooms/zones |
+| `/api/events` | GET | Recent events (query: `limit`, `light_id`, `event_type`, `days`) |
+| `/api/events/summary` | GET | Aggregated stats by light and hour |
+| `/api/patterns` | GET | Detected patterns |
+| `/api/analyze` | POST | Trigger pattern analysis |
+
+Example: `curl http://<pi-ip>:5000/api/patterns`

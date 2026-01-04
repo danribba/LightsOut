@@ -41,3 +41,11 @@ automation:
   dry_run: true
   # Minimum confidence to trigger automation
   min_confidence: 0.85
+
+api:
+  # Enable REST API for remote access
+  enabled: true
+  # Host to bind to (0.0.0.0 = all interfaces)
+  host: "0.0.0.0"
+  # Port to listen on
+  port: 5000
