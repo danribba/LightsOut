@@ -106,6 +106,12 @@ sudo systemctl restart lightsout
 
 Adjust `WorkingDirectory` and `User` in `lightsout.service` if not using default pi user.
 
+## Dashboard
+
+Web dashboard available at `http://<pi-ip>:5000/`
+
+Shows: live light status, recent events, detected patterns, activity graph by hour. Auto-refreshes every 30 seconds.
+
 ## REST API
 
 API runs on port 5000 by default (configurable in `config.yaml`).

@@ -2,15 +2,19 @@
 
 import threading
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory, redirect
 from flask_cors import CORS
 from loguru import logger
 
 from src.hue.bridge import HueBridge
 from src.storage.database import Database
 from src.analyzer.pattern_detector import PatternDetector
+
+# Static files directory
+STATIC_DIR = Path(__file__).parent / "static"
 
 
 def create_api(
@@ -29,8 +33,18 @@ def create_api(
     Returns:
         Configured Flask app.
     """
-    app = Flask(__name__)
+    app = Flask(__name__, static_folder=str(STATIC_DIR))
     CORS(app)  # Allow cross-origin requests from PC
+
+    @app.route("/")
+    def index():
+        """Serve dashboard."""
+        return send_from_directory(STATIC_DIR, "index.html")
+
+    @app.route("/dashboard")
+    def dashboard():
+        """Redirect to main dashboard."""
+        return redirect("/")
 
     @app.route("/api/status", methods=["GET"])
     def get_status():
@@ -240,6 +254,7 @@ class APIServer:
         )
         self._thread.start()
         logger.info(f"🌐 API server started on http://{self.host}:{self.port}")
+        logger.info(f"📊 Dashboard: http://{self.host}:{self.port}/")
 
     def _run(self):
         """Run Flask app (called in background thread)."""
