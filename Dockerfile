@@ -2,6 +2,16 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Install build dependencies for numpy/pandas on ARM
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    libatlas-base-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Use piwheels for pre-built ARM packages
+RUN pip config set global.extra-index-url https://www.piwheels.org/simple
+
 # Install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
