@@ -6,7 +6,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
-    libatlas-base-dev \
+    gfortran \
+    libopenblas-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Use piwheels for pre-built ARM packages
