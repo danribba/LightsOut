@@ -318,13 +318,26 @@ def create_api(
         action = json.loads(automation.action_config) if automation.action_config else {}
         target_ids = automation.target_ids.split(",") if automation.target_ids else []
 
+        # Map Hue API param names to method param names
+        param_map = {
+            "bri": "brightness",
+            "sat": "saturation",
+            "ct": "color_temp",
+            "transitiontime": "transition_time",
+        }
+        mapped_action = {}
+        for key, value in action.items():
+            mapped_key = param_map.get(key, key)
+            mapped_action[mapped_key] = value
+
         success_count = 0
         for target_id in target_ids:
+            target_id = target_id.strip()
             if automation.target_type == "light":
-                if bridge.set_light_state(target_id, **action):
+                if bridge.set_light_state(target_id, **mapped_action):
                     success_count += 1
             elif automation.target_type == "room":
-                if bridge.set_group_state(target_id, **action):
+                if bridge.set_group_state(target_id, **mapped_action):
                     success_count += 1
 
         # Record trigger
