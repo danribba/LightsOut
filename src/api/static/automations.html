@@ -469,6 +469,7 @@
 
         <div class="tabs">
             <button class="tab active" data-tab="list">Mina automationer</button>
+            <button class="tab" data-tab="hue">Hue-automationer</button>
             <button class="tab" data-tab="create">Skapa ny</button>
             <button class="tab" data-tab="templates">Mallar</button>
             <button class="tab" data-tab="test">Testa lampor</button>
@@ -479,6 +480,39 @@
             <div class="card">
                 <h2>Aktiva automationer</h2>
                 <div id="automation-list" class="automation-list">
+                    <div class="loading">Laddar...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hue automations panel -->
+        <div id="hue-panel" class="panel">
+            <div class="card">
+                <h2>Scheman (Schedules)</h2>
+                <p style="color: #888; margin-bottom: 15px; font-size: 0.9rem;">
+                    Tidsstyrda automationer som konfigurerats i Hue-appen eller via API.
+                </p>
+                <div id="hue-schedules" class="automation-list">
+                    <div class="loading">Laddar...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Regler (Rules)</h2>
+                <p style="color: #888; margin-bottom: 15px; font-size: 0.9rem;">
+                    Villkorsstyrda automationer (sensorer, knappar, etc).
+                </p>
+                <div id="hue-rules" class="automation-list">
+                    <div class="loading">Laddar...</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Sensorer</h2>
+                <p style="color: #888; margin-bottom: 15px; font-size: 0.9rem;">
+                    Rorelsedetektorer, knappar och virtuella sensorer.
+                </p>
+                <div id="hue-sensors" class="automation-list">
                     <div class="loading">Laddar...</div>
                 </div>
             </div>
@@ -1132,8 +1166,164 @@
             setTimeout(() => toast.remove(), 3000);
         }
 
+        // ===== Hue Bridge Data =====
+        async function loadHueData() {
+            try {
+                const [schedulesRes, rulesRes, sensorsRes] = await Promise.all([
+                    fetch(`${API}/api/hue/schedules`).then(r => r.json()),
+                    fetch(`${API}/api/hue/rules`).then(r => r.json()),
+                    fetch(`${API}/api/hue/sensors`).then(r => r.json())
+                ]);
+
+                renderHueSchedules(schedulesRes.schedules || []);
+                renderHueRules(rulesRes.rules || []);
+                renderHueSensors(sensorsRes.sensors || []);
+            } catch (e) {
+                console.error('Failed to load Hue data:', e);
+            }
+        }
+
+        function renderHueSchedules(schedules) {
+            const el = document.getElementById('hue-schedules');
+            if (schedules.length === 0) {
+                el.innerHTML = '<div class="empty-state"><p>Inga scheman hittade i Hue-bryggan.</p></div>';
+                return;
+            }
+
+            el.innerHTML = schedules.map(s => {
+                const timeDisplay = parseHueTime(s.localtime);
+                const statusClass = s.status === 'enabled' ? '' : 'disabled';
+                return `
+                    <div class="automation-item ${statusClass}">
+                        <div class="automation-info">
+                            <div class="automation-name">${s.name}</div>
+                            ${s.description ? `<div class="automation-desc">${s.description}</div>` : ''}
+                            <div class="automation-meta">
+                                <span>${timeDisplay}</span>
+                                <span>${s.status}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderHueRules(rules) {
+            const el = document.getElementById('hue-rules');
+            if (rules.length === 0) {
+                el.innerHTML = '<div class="empty-state"><p>Inga regler hittade i Hue-bryggan.</p></div>';
+                return;
+            }
+
+            el.innerHTML = rules.map(r => {
+                const statusClass = r.status === 'enabled' ? '' : 'disabled';
+                const conditionsText = r.conditions.length + ' villkor';
+                const actionsText = r.actions.length + ' aktioner';
+                return `
+                    <div class="automation-item ${statusClass}">
+                        <div class="automation-info">
+                            <div class="automation-name">${r.name}</div>
+                            <div class="automation-meta">
+                                <span>${conditionsText}</span>
+                                <span>${actionsText}</span>
+                                <span>Triggad ${r.times_triggered}x</span>
+                                <span>${r.status}</span>
+                            </div>
+                        </div>
+                        <button class="btn btn-sm btn-secondary" onclick="showRuleDetails(${JSON.stringify(r).replace(/"/g, '&quot;')})">Detaljer</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderHueSensors(sensors) {
+            const el = document.getElementById('hue-sensors');
+
+            // Filter to show only interesting sensors (motion, switches, etc)
+            const interestingSensors = sensors.filter(s =>
+                s.type.includes('presence') ||
+                s.type.includes('motion') ||
+                s.type.includes('Switch') ||
+                s.type.includes('Button') ||
+                s.type.includes('light') ||
+                s.type.includes('Daylight') ||
+                s.manufacturer === 'Signify Netherlands B.V.'
+            );
+
+            if (interestingSensors.length === 0) {
+                el.innerHTML = '<div class="empty-state"><p>Inga sensorer hittade.</p></div>';
+                return;
+            }
+
+            el.innerHTML = interestingSensors.map(s => {
+                const stateInfo = formatSensorState(s);
+                return `
+                    <div class="automation-item">
+                        <div class="automation-info">
+                            <div class="automation-name">${s.name}</div>
+                            <div class="automation-meta">
+                                <span>${s.type}</span>
+                                ${stateInfo ? `<span>${stateInfo}</span>` : ''}
+                                ${s.config.on === false ? '<span style="color:#f87171">Avaktiverad</span>' : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function parseHueTime(localtime) {
+            if (!localtime) return 'Ingen tid';
+
+            // Handle recurring times like W124/T07:00:00
+            if (localtime.startsWith('W')) {
+                const match = localtime.match(/W(\d+)\/T(\d{2}:\d{2})/);
+                if (match) {
+                    const weekmask = parseInt(match[1]);
+                    const time = match[2];
+                    const days = [];
+                    if (weekmask & 64) days.push('Man');
+                    if (weekmask & 32) days.push('Tis');
+                    if (weekmask & 16) days.push('Ons');
+                    if (weekmask & 8) days.push('Tor');
+                    if (weekmask & 4) days.push('Fre');
+                    if (weekmask & 2) days.push('Lor');
+                    if (weekmask & 1) days.push('Son');
+                    return `${time} (${days.join(', ')})`;
+                }
+            }
+
+            // Handle absolute times
+            if (localtime.includes('T')) {
+                const match = localtime.match(/T(\d{2}:\d{2})/);
+                if (match) return match[1];
+            }
+
+            // Handle timers like PT00:15:00
+            if (localtime.startsWith('PT')) {
+                return `Timer: ${localtime.substring(2)}`;
+            }
+
+            return localtime;
+        }
+
+        function formatSensorState(sensor) {
+            const state = sensor.state || {};
+            if ('presence' in state) return state.presence ? 'Rorelse!' : 'Ingen rorelse';
+            if ('buttonevent' in state) return `Knapp: ${state.buttonevent}`;
+            if ('daylight' in state) return state.daylight ? 'Dagsljus' : 'Morkt';
+            if ('lightlevel' in state) return `Ljus: ${state.lightlevel} lux`;
+            if ('temperature' in state) return `${(state.temperature / 100).toFixed(1)}°C`;
+            return '';
+        }
+
+        function showRuleDetails(rule) {
+            alert(`Regel: ${rule.name}\n\nVillkor:\n${JSON.stringify(rule.conditions, null, 2)}\n\nAktioner:\n${JSON.stringify(rule.actions, null, 2)}`);
+        }
+
         // Initialize
         loadData();
+        loadHueData();
         updatePreview();
     </script>
 </body>

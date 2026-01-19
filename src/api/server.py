@@ -427,6 +427,71 @@ def create_api(
             "date": datetime.now().strftime("%Y-%m-%d"),
         })
 
+    # ===== Hue Bridge Native Automations =====
+
+    @app.route("/api/hue/schedules", methods=["GET"])
+    def get_hue_schedules():
+        """Get all schedules from Hue bridge."""
+        schedules = bridge.get_schedules()
+        return jsonify({
+            "count": len(schedules),
+            "schedules": [
+                {
+                    "id": sid,
+                    "name": s.get("name", "Unknown"),
+                    "description": s.get("description", ""),
+                    "status": s.get("status", "disabled"),
+                    "localtime": s.get("localtime", ""),
+                    "command": s.get("command", {}),
+                    "created": s.get("created", ""),
+                    "starttime": s.get("starttime", ""),
+                }
+                for sid, s in schedules.items()
+            ],
+        })
+
+    @app.route("/api/hue/rules", methods=["GET"])
+    def get_hue_rules():
+        """Get all rules from Hue bridge."""
+        rules = bridge.get_rules()
+        return jsonify({
+            "count": len(rules),
+            "rules": [
+                {
+                    "id": rid,
+                    "name": r.get("name", "Unknown"),
+                    "status": r.get("status", "disabled"),
+                    "conditions": r.get("conditions", []),
+                    "actions": r.get("actions", []),
+                    "owner": r.get("owner", ""),
+                    "times_triggered": r.get("timestriggered", 0),
+                    "last_triggered": r.get("lasttriggered", ""),
+                    "created": r.get("created", ""),
+                }
+                for rid, r in rules.items()
+            ],
+        })
+
+    @app.route("/api/hue/sensors", methods=["GET"])
+    def get_hue_sensors():
+        """Get all sensors from Hue bridge."""
+        sensors = bridge.get_sensors()
+        return jsonify({
+            "count": len(sensors),
+            "sensors": [
+                {
+                    "id": sid,
+                    "name": s.get("name", "Unknown"),
+                    "type": s.get("type", ""),
+                    "model_id": s.get("modelid", ""),
+                    "manufacturer": s.get("manufacturername", ""),
+                    "state": s.get("state", {}),
+                    "config": s.get("config", {}),
+                }
+                for sid, s in sensors.items()
+            ],
+        })
+
     return app
 
 

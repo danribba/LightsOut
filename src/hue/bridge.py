@@ -328,3 +328,39 @@ class HueBridge:
         except Exception as e:
             logger.error(f"Failed to get scenes: {e}")
             return {}
+
+    def get_schedules(self) -> dict:
+        """Get all schedules from bridge."""
+        if not self._bridge:
+            logger.error("Not connected to bridge")
+            return {}
+
+        try:
+            return self._bridge.get_schedule() or {}
+        except Exception as e:
+            logger.error(f"Failed to get schedules: {e}")
+            return {}
+
+    def get_rules(self) -> dict:
+        """Get all rules from bridge."""
+        if not self._bridge:
+            logger.error("Not connected to bridge")
+            return {}
+
+        try:
+            return self._bridge.get_rule() or {}
+        except Exception as e:
+            logger.error(f"Failed to get rules: {e}")
+            return {}
+
+    def get_sensors(self) -> dict:
+        """Get all sensors from bridge."""
+        if not self._bridge:
+            logger.error("Not connected to bridge")
+            return {}
+
+        try:
+            return self._bridge.get_sensor() or {}
+        except Exception as e:
+            logger.error(f"Failed to get sensors: {e}")
+            return {}
