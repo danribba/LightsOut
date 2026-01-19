@@ -10,5 +10,6 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
       - ./config.yaml:/app/config.yaml:ro
+      - ./phue_credentials:/app/.python_hue
     environment:
       - TZ=Europe/Stockholm
