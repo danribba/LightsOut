@@ -189,9 +189,13 @@ class HueBridge:
         hue: Optional[int] = None,
         saturation: Optional[int] = None,
         color_temp: Optional[int] = None,
+        transition_time: Optional[int] = None,
+        alert: Optional[str] = None,
+        effect: Optional[str] = None,
+        xy: Optional[list[float]] = None,
     ) -> bool:
         """
-        Set light state.
+        Set light state with advanced Hue features.
 
         Args:
             light_id: ID of the light to control
@@ -200,6 +204,10 @@ class HueBridge:
             hue: Color hue (0-65535)
             saturation: Color saturation (0-254)
             color_temp: Color temperature in mirek (153-500)
+            transition_time: Fade time in 1/10 seconds (e.g., 6000 = 10 min)
+            alert: Alert effect ("none", "select", "lselect")
+            effect: Light effect ("none", "colorloop")
+            xy: CIE color coordinates [x, y]
 
         Returns:
             True if successful, False otherwise.
@@ -220,6 +228,14 @@ class HueBridge:
                 command["sat"] = max(0, min(254, saturation))
             if color_temp is not None:
                 command["ct"] = max(153, min(500, color_temp))
+            if transition_time is not None:
+                command["transitiontime"] = max(0, min(65535, transition_time))
+            if alert is not None and alert in ("none", "select", "lselect"):
+                command["alert"] = alert
+            if effect is not None and effect in ("none", "colorloop"):
+                command["effect"] = effect
+            if xy is not None and len(xy) == 2:
+                command["xy"] = [max(0, min(1, xy[0])), max(0, min(1, xy[1]))]
 
             if command:
                 self._bridge.set_light(int(light_id), command)
@@ -230,3 +246,85 @@ class HueBridge:
             logger.error(f"Failed to set light {light_id}: {e}")
 
         return False
+
+    def set_group_state(
+        self,
+        group_id: str,
+        on: Optional[bool] = None,
+        brightness: Optional[int] = None,
+        hue: Optional[int] = None,
+        saturation: Optional[int] = None,
+        color_temp: Optional[int] = None,
+        transition_time: Optional[int] = None,
+        alert: Optional[str] = None,
+        effect: Optional[str] = None,
+        xy: Optional[list[float]] = None,
+        scene: Optional[str] = None,
+    ) -> bool:
+        """
+        Set group/room state with advanced Hue features.
+
+        Args:
+            group_id: ID of the group/room to control
+            on: Turn on/off
+            brightness: Brightness level (0-254)
+            hue: Color hue (0-65535)
+            saturation: Color saturation (0-254)
+            color_temp: Color temperature in mirek (153-500)
+            transition_time: Fade time in 1/10 seconds
+            alert: Alert effect ("none", "select", "lselect")
+            effect: Light effect ("none", "colorloop")
+            xy: CIE color coordinates [x, y]
+            scene: Scene ID to activate
+
+        Returns:
+            True if successful, False otherwise.
+        """
+        if not self._bridge:
+            logger.error("Not connected to bridge")
+            return False
+
+        try:
+            command = {}
+            if on is not None:
+                command["on"] = on
+            if brightness is not None:
+                command["bri"] = max(0, min(254, brightness))
+            if hue is not None:
+                command["hue"] = max(0, min(65535, hue))
+            if saturation is not None:
+                command["sat"] = max(0, min(254, saturation))
+            if color_temp is not None:
+                command["ct"] = max(153, min(500, color_temp))
+            if transition_time is not None:
+                command["transitiontime"] = max(0, min(65535, transition_time))
+            if alert is not None and alert in ("none", "select", "lselect"):
+                command["alert"] = alert
+            if effect is not None and effect in ("none", "colorloop"):
+                command["effect"] = effect
+            if xy is not None and len(xy) == 2:
+                command["xy"] = [max(0, min(1, xy[0])), max(0, min(1, xy[1]))]
+            if scene is not None:
+                command["scene"] = scene
+
+            if command:
+                self._bridge.set_group(int(group_id), command)
+                logger.debug(f"Set group {group_id}: {command}")
+                return True
+
+        except Exception as e:
+            logger.error(f"Failed to set group {group_id}: {e}")
+
+        return False
+
+    def get_scenes(self) -> dict:
+        """Get all scenes from bridge."""
+        if not self._bridge:
+            logger.error("Not connected to bridge")
+            return {}
+
+        try:
+            return self._bridge.get_scene() or {}
+        except Exception as e:
+            logger.error(f"Failed to get scenes: {e}")
+            return {}

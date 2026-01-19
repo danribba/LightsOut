@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Automationer - LightsOut</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        a { color: #60a5fa; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .header h1 {
+            font-size: 1.8rem;
+            color: #fff;
+        }
+        .header-info {
+            display: flex;
+            gap: 20px;
+            font-size: 0.9rem;
+            color: #888;
+        }
+        .sun-times {
+            display: flex;
+            gap: 15px;
+        }
+        .sun-times span {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+        .tab {
+            padding: 10px 20px;
+            background: transparent;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            font-size: 1rem;
+            border-radius: 8px 8px 0 0;
+            transition: all 0.2s;
+        }
+        .tab:hover { color: #fff; }
+        .tab.active {
+            background: #16213e;
+            color: #60a5fa;
+        }
+
+        .panel { display: none; }
+        .panel.active { display: block; }
+
+        /* Cards */
+        .card {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .card h2 {
+            font-size: 1.1rem;
+            color: #888;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Form styles */
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #ccc;
+        }
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #1a1a2e;
+            color: #fff;
+            font-size: 1rem;
+        }
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #60a5fa;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .form-hint {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        /* Weekday picker */
+        .weekday-picker {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .weekday-picker label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 8px 12px;
+            background: #1a1a2e;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .weekday-picker label:hover {
+            background: #252550;
+        }
+        .weekday-picker input:checked + span {
+            color: #60a5fa;
+        }
+        .weekday-picker input {
+            display: none;
+        }
+
+        /* Target picker */
+        .target-picker {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .target-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px;
+            background: #1a1a2e;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .target-item:hover {
+            background: #252550;
+        }
+        .target-item.selected {
+            background: #1e3a5f;
+            border: 1px solid #60a5fa;
+        }
+        .target-item input {
+            display: none;
+        }
+
+        /* Action config */
+        .action-preview {
+            background: #1a1a2e;
+            border-radius: 8px;
+            padding: 15px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow: auto;
+        }
+
+        /* Slider */
+        .slider-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .slider-group input[type="range"] {
+            flex: 1;
+            -webkit-appearance: none;
+            height: 8px;
+            border-radius: 4px;
+            background: #333;
+        }
+        .slider-group input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #60a5fa;
+            cursor: pointer;
+        }
+        .slider-value {
+            min-width: 60px;
+            text-align: right;
+            font-family: monospace;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+        .btn-secondary {
+            background: #374151;
+            color: white;
+        }
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+        .btn-success:hover {
+            background: #059669;
+        }
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+        .btn-sm {
+            padding: 8px 16px;
+            font-size: 0.9rem;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        /* Automation list */
+        .automation-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .automation-item {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .automation-item.disabled {
+            opacity: 0.5;
+        }
+        .automation-info {
+            flex: 1;
+            min-width: 200px;
+        }
+        .automation-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        .automation-desc {
+            color: #888;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+        }
+        .automation-meta {
+            display: flex;
+            gap: 15px;
+            font-size: 0.85rem;
+            color: #666;
+        }
+        .automation-meta span {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .automation-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* Toggle switch */
+        .toggle {
+            position: relative;
+            width: 50px;
+            height: 26px;
+        }
+        .toggle input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #333;
+            transition: 0.3s;
+            border-radius: 26px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+        .toggle input:checked + .toggle-slider {
+            background-color: #10b981;
+        }
+        .toggle input:checked + .toggle-slider:before {
+            transform: translateX(24px);
+        }
+
+        /* Sequence builder */
+        .sequence-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .sequence-step {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            background: #1a1a2e;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .sequence-step .step-num {
+            background: #333;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        .sequence-step input {
+            width: 80px;
+        }
+
+        /* Toast notifications */
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            animation: slideIn 0.3s ease;
+            z-index: 1000;
+        }
+        .toast.success { background: #10b981; }
+        .toast.error { background: #ef4444; }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* Templates */
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+        }
+        .template-card {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        .template-card:hover {
+            border-color: #60a5fa;
+        }
+        .template-card h3 {
+            margin-bottom: 10px;
+        }
+        .template-card p {
+            color: #888;
+            font-size: 0.9rem;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div>
+                <h1>Automationer</h1>
+                <a href="/">Tillbaka till Dashboard</a>
+            </div>
+            <div class="header-info">
+                <div class="sun-times">
+                    <span id="sunrise">Soluppgang: --:--</span>
+                    <span id="sunset">Solnedgang: --:--</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" data-tab="list">Mina automationer</button>
+            <button class="tab" data-tab="create">Skapa ny</button>
+            <button class="tab" data-tab="templates">Mallar</button>
+            <button class="tab" data-tab="test">Testa lampor</button>
+        </div>
+
+        <!-- List panel -->
+        <div id="list-panel" class="panel active">
+            <div class="card">
+                <h2>Aktiva automationer</h2>
+                <div id="automation-list" class="automation-list">
+                    <div class="loading">Laddar...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Create panel -->
+        <div id="create-panel" class="panel">
+            <div class="card">
+                <h2>Skapa automation</h2>
+                <form id="create-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Namn</label>
+                            <input type="text" id="auto-name" required placeholder="T.ex. Morgonljus Hugo">
+                        </div>
+                        <div class="form-group">
+                            <label>Beskrivning (valfri)</label>
+                            <input type="text" id="auto-desc" placeholder="T.ex. Gradvis tackning kl 06:45">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Trigger</label>
+                        <div class="form-row">
+                            <select id="trigger-type">
+                                <option value="time">Tid</option>
+                                <option value="sunrise">Soluppgang</option>
+                                <option value="sunset">Solnedgang</option>
+                                <option value="manual">Manuell (knapp)</option>
+                            </select>
+                            <input type="time" id="trigger-time" value="07:00">
+                            <input type="number" id="trigger-offset" placeholder="Offset (min)" style="display:none">
+                        </div>
+                    </div>
+
+                    <div class="form-group" id="weekdays-group">
+                        <label>Dagar</label>
+                        <div class="weekday-picker">
+                            <label><input type="checkbox" name="weekday" value="0" checked><span>Man</span></label>
+                            <label><input type="checkbox" name="weekday" value="1" checked><span>Tis</span></label>
+                            <label><input type="checkbox" name="weekday" value="2" checked><span>Ons</span></label>
+                            <label><input type="checkbox" name="weekday" value="3" checked><span>Tor</span></label>
+                            <label><input type="checkbox" name="weekday" value="4" checked><span>Fre</span></label>
+                            <label><input type="checkbox" name="weekday" value="5"><span>Lor</span></label>
+                            <label><input type="checkbox" name="weekday" value="6"><span>Son</span></label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Mal (lampor/rum)</label>
+                        <div class="form-row" style="margin-bottom: 10px;">
+                            <select id="target-type">
+                                <option value="light">Lampor</option>
+                                <option value="room">Rum</option>
+                            </select>
+                        </div>
+                        <div id="target-picker" class="target-picker">
+                            <div class="loading">Laddar...</div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Aktion</label>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Tillstand</label>
+                                <select id="action-on">
+                                    <option value="true">Tand</option>
+                                    <option value="false">Slack</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Ljusstyrka (%)</label>
+                                <div class="slider-group">
+                                    <input type="range" id="action-bri" min="0" max="100" value="100">
+                                    <span class="slider-value" id="bri-value">100%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Fargtemperatur</label>
+                                <select id="action-ct">
+                                    <option value="">Oforandrad</option>
+                                    <option value="153">Dagsljus (6500K)</option>
+                                    <option value="250">Neutral (4000K)</option>
+                                    <option value="366">Varm (2700K)</option>
+                                    <option value="454">Extra varm (2200K)</option>
+                                    <option value="500">Levande ljus (2000K)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Fade-tid</label>
+                                <select id="action-transition">
+                                    <option value="0">Direkt</option>
+                                    <option value="10">1 sekund</option>
+                                    <option value="50">5 sekunder</option>
+                                    <option value="100">10 sekunder</option>
+                                    <option value="300">30 sekunder</option>
+                                    <option value="600">1 minut</option>
+                                    <option value="3000">5 minuter</option>
+                                    <option value="6000">10 minuter</option>
+                                    <option value="9000">15 minuter</option>
+                                    <option value="18000">30 minuter</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Forhandsvisning (JSON)</label>
+                        <div id="action-preview" class="action-preview">{}</div>
+                    </div>
+
+                    <div class="btn-group">
+                        <button type="submit" class="btn btn-primary">Skapa automation</button>
+                        <button type="button" class="btn btn-secondary" onclick="resetForm()">Rensa</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Templates panel -->
+        <div id="templates-panel" class="panel">
+            <div class="card">
+                <h2>Mallar</h2>
+                <div class="template-grid">
+                    <div class="template-card" onclick="loadTemplate('wakeup')">
+                        <h3>Wake-up Light</h3>
+                        <p>Gradvis tackning over 15 minuter. Perfekt for sovrum.</p>
+                    </div>
+                    <div class="template-card" onclick="loadTemplate('evening')">
+                        <h3>Kvallsscen</h3>
+                        <p>Dimmat, varmt ljus vid solnedgang.</p>
+                    </div>
+                    <div class="template-card" onclick="loadTemplate('goodnight')">
+                        <h3>Godnatt</h3>
+                        <p>Slack alla lampor kl 22:00 pa vardagar.</p>
+                    </div>
+                    <div class="template-card" onclick="loadTemplate('arrival')">
+                        <h3>Hemkomst</h3>
+                        <p>Tand hall och vardagsrum vid solnedgang.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Test panel -->
+        <div id="test-panel" class="panel">
+            <div class="card">
+                <h2>Testa lampor</h2>
+                <p style="color: #888; margin-bottom: 20px;">
+                    Testa avancerade Hue-funktioner direkt. Valj lampa och justera installningar.
+                </p>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Valj lampa</label>
+                        <select id="test-light">
+                            <option value="">Laddar...</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Tillstand</label>
+                        <select id="test-on">
+                            <option value="true">Tand</option>
+                            <option value="false">Slack</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Ljusstyrka</label>
+                        <div class="slider-group">
+                            <input type="range" id="test-bri" min="0" max="100" value="100">
+                            <span class="slider-value" id="test-bri-value">100%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Fargtemperatur</label>
+                        <select id="test-ct">
+                            <option value="">Oforandrad</option>
+                            <option value="153">Dagsljus (6500K)</option>
+                            <option value="250">Neutral (4000K)</option>
+                            <option value="366">Varm (2700K)</option>
+                            <option value="454">Extra varm (2200K)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Fade-tid</label>
+                        <select id="test-transition">
+                            <option value="0">Direkt</option>
+                            <option value="10">1 sekund</option>
+                            <option value="50">5 sekunder</option>
+                            <option value="100">10 sekunder</option>
+                            <option value="600">1 minut</option>
+                            <option value="6000">10 minuter</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="testLight()">Kor kommando</button>
+                    <button class="btn btn-secondary" onclick="blinkLight()">Blinka (hitta lampa)</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = window.location.origin;
+        let lights = [];
+        let rooms = [];
+
+        // Tab switching
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab + '-panel').classList.add('active');
+            });
+        });
+
+        // Load data
+        async function loadData() {
+            try {
+                const [lightsRes, roomsRes, sunRes, autoRes] = await Promise.all([
+                    fetch(`${API}/api/lights`).then(r => r.json()),
+                    fetch(`${API}/api/rooms`).then(r => r.json()),
+                    fetch(`${API}/api/sun`).then(r => r.json()),
+                    fetch(`${API}/api/automations`).then(r => r.json())
+                ]);
+
+                lights = lightsRes.lights || [];
+                rooms = roomsRes.rooms || [];
+
+                // Update sun times
+                document.getElementById('sunrise').textContent = `Soluppgang: ${sunRes.sunrise}`;
+                document.getElementById('sunset').textContent = `Solnedgang: ${sunRes.sunset}`;
+
+                // Render targets
+                renderTargets();
+
+                // Render test light selector
+                const testSelect = document.getElementById('test-light');
+                testSelect.innerHTML = lights.map(l =>
+                    `<option value="${l.id}">${l.name}</option>`
+                ).join('');
+
+                // Render automation list
+                renderAutomations(autoRes.automations || []);
+
+            } catch (e) {
+                console.error('Failed to load data:', e);
+                showToast('Kunde inte ladda data', 'error');
+            }
+        }
+
+        function renderTargets() {
+            const type = document.getElementById('target-type').value;
+            const picker = document.getElementById('target-picker');
+            const items = type === 'light' ? lights : rooms;
+
+            picker.innerHTML = items.map(item => `
+                <div class="target-item" onclick="toggleTarget(this, '${item.id}')">
+                    <input type="checkbox" value="${item.id}">
+                    <span>${item.name}</span>
+                </div>
+            `).join('');
+        }
+
+        function toggleTarget(el, id) {
+            el.classList.toggle('selected');
+            el.querySelector('input').checked = el.classList.contains('selected');
+            updatePreview();
+        }
+
+        function renderAutomations(automations) {
+            const list = document.getElementById('automation-list');
+
+            if (automations.length === 0) {
+                list.innerHTML = `
+                    <div class="empty-state">
+                        <h3>Inga automationer an</h3>
+                        <p>Skapa din forsta automation med "Skapa ny"-fliken.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            list.innerHTML = automations.map(a => {
+                const triggerText = getTriggerText(a);
+                const targetCount = a.target_ids?.length || 0;
+
+                return `
+                    <div class="automation-item ${a.is_enabled ? '' : 'disabled'}">
+                        <div class="automation-info">
+                            <div class="automation-name">${a.name}</div>
+                            ${a.description ? `<div class="automation-desc">${a.description}</div>` : ''}
+                            <div class="automation-meta">
+                                <span>${triggerText}</span>
+                                <span>${targetCount} mal</span>
+                                ${a.trigger_count ? `<span>Kort ${a.trigger_count}x</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="automation-actions">
+                            <button class="btn btn-sm btn-success" onclick="runAutomation(${a.id})">Kor nu</button>
+                            <label class="toggle">
+                                <input type="checkbox" ${a.is_enabled ? 'checked' : ''} onchange="toggleAutomation(${a.id})">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <button class="btn btn-sm btn-danger" onclick="deleteAutomation(${a.id})">Ta bort</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function getTriggerText(automation) {
+            const config = automation.trigger_config || {};
+            switch (automation.trigger_type) {
+                case 'time':
+                    return `Kl ${config.time || '??:??'}`;
+                case 'sunrise':
+                    const sunriseOffset = config.offset_minutes || 0;
+                    return sunriseOffset ? `Soluppgang ${sunriseOffset > 0 ? '+' : ''}${sunriseOffset} min` : 'Soluppgang';
+                case 'sunset':
+                    const sunsetOffset = config.offset_minutes || 0;
+                    return sunsetOffset ? `Solnedgang ${sunsetOffset > 0 ? '+' : ''}${sunsetOffset} min` : 'Solnedgang';
+                case 'manual':
+                    return 'Manuell';
+                default:
+                    return automation.trigger_type;
+            }
+        }
+
+        // Form handlers
+        document.getElementById('trigger-type').addEventListener('change', function() {
+            const timeInput = document.getElementById('trigger-time');
+            const offsetInput = document.getElementById('trigger-offset');
+            const weekdaysGroup = document.getElementById('weekdays-group');
+
+            if (this.value === 'time') {
+                timeInput.style.display = 'block';
+                offsetInput.style.display = 'none';
+                weekdaysGroup.style.display = 'block';
+            } else if (this.value === 'sunrise' || this.value === 'sunset') {
+                timeInput.style.display = 'none';
+                offsetInput.style.display = 'block';
+                offsetInput.placeholder = 'Offset i minuter (t.ex. -15)';
+                weekdaysGroup.style.display = 'block';
+            } else {
+                timeInput.style.display = 'none';
+                offsetInput.style.display = 'none';
+                weekdaysGroup.style.display = 'none';
+            }
+        });
+
+        document.getElementById('target-type').addEventListener('change', renderTargets);
+
+        // Brightness slider
+        document.getElementById('action-bri').addEventListener('input', function() {
+            document.getElementById('bri-value').textContent = this.value + '%';
+            updatePreview();
+        });
+
+        document.getElementById('test-bri').addEventListener('input', function() {
+            document.getElementById('test-bri-value').textContent = this.value + '%';
+        });
+
+        // Update preview
+        ['action-on', 'action-bri', 'action-ct', 'action-transition'].forEach(id => {
+            document.getElementById(id).addEventListener('change', updatePreview);
+        });
+
+        function updatePreview() {
+            const action = buildActionConfig();
+            document.getElementById('action-preview').textContent = JSON.stringify(action, null, 2);
+        }
+
+        function buildActionConfig() {
+            const action = {};
+
+            const on = document.getElementById('action-on').value;
+            action.on = on === 'true';
+
+            if (action.on) {
+                const bri = parseInt(document.getElementById('action-bri').value);
+                action.bri = Math.round(bri * 254 / 100);
+
+                const ct = document.getElementById('action-ct').value;
+                if (ct) action.ct = parseInt(ct);
+
+                const transition = document.getElementById('action-transition').value;
+                if (transition !== '0') action.transitiontime = parseInt(transition);
+            }
+
+            return action;
+        }
+
+        function getSelectedTargets() {
+            return Array.from(document.querySelectorAll('#target-picker .target-item.selected input'))
+                .map(input => input.value);
+        }
+
+        function getSelectedWeekdays() {
+            return Array.from(document.querySelectorAll('input[name="weekday"]:checked'))
+                .map(input => parseInt(input.value));
+        }
+
+        // Create automation
+        document.getElementById('create-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const name = document.getElementById('auto-name').value;
+            const description = document.getElementById('auto-desc').value;
+            const triggerType = document.getElementById('trigger-type').value;
+            const targetType = document.getElementById('target-type').value;
+            const targetIds = getSelectedTargets();
+            const action = buildActionConfig();
+
+            if (targetIds.length === 0) {
+                showToast('Valj minst ett mal', 'error');
+                return;
+            }
+
+            // Build trigger config
+            const triggerConfig = {};
+            if (triggerType === 'time') {
+                triggerConfig.time = document.getElementById('trigger-time').value;
+                triggerConfig.weekdays = getSelectedWeekdays();
+            } else if (triggerType === 'sunrise' || triggerType === 'sunset') {
+                const offset = parseInt(document.getElementById('trigger-offset').value) || 0;
+                triggerConfig.offset_minutes = offset;
+                triggerConfig.weekdays = getSelectedWeekdays();
+            }
+
+            try {
+                const res = await fetch(`${API}/api/automations`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name,
+                        description,
+                        trigger_type: triggerType,
+                        trigger_config: triggerConfig,
+                        target_type: targetType,
+                        target_ids: targetIds,
+                        action_config: action
+                    })
+                });
+
+                if (res.ok) {
+                    showToast('Automation skapad!', 'success');
+                    resetForm();
+                    loadData();
+                    document.querySelector('[data-tab="list"]').click();
+                } else {
+                    const err = await res.json();
+                    showToast(err.error || 'Kunde inte skapa', 'error');
+                }
+            } catch (e) {
+                showToast('Natveksfel', 'error');
+            }
+        });
+
+        function resetForm() {
+            document.getElementById('create-form').reset();
+            document.querySelectorAll('#target-picker .target-item').forEach(el => {
+                el.classList.remove('selected');
+                el.querySelector('input').checked = false;
+            });
+            document.getElementById('bri-value').textContent = '100%';
+            updatePreview();
+        }
+
+        // Automation actions
+        async function runAutomation(id) {
+            try {
+                const res = await fetch(`${API}/api/automations/${id}/run`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(`Kort ${data.automation}`, 'success');
+                    loadData();
+                }
+            } catch (e) {
+                showToast('Kunde inte kora', 'error');
+            }
+        }
+
+        async function toggleAutomation(id) {
+            try {
+                await fetch(`${API}/api/automations/${id}/toggle`, { method: 'POST' });
+                loadData();
+            } catch (e) {
+                showToast('Kunde inte andra status', 'error');
+            }
+        }
+
+        async function deleteAutomation(id) {
+            if (!confirm('Ta bort denna automation?')) return;
+            try {
+                await fetch(`${API}/api/automations/${id}`, { method: 'DELETE' });
+                showToast('Automation borttagen', 'success');
+                loadData();
+            } catch (e) {
+                showToast('Kunde inte ta bort', 'error');
+            }
+        }
+
+        // Test light
+        async function testLight() {
+            const lightId = document.getElementById('test-light').value;
+            if (!lightId) return;
+
+            const command = {
+                on: document.getElementById('test-on').value === 'true'
+            };
+
+            if (command.on) {
+                const bri = parseInt(document.getElementById('test-bri').value);
+                command.bri = Math.round(bri * 254 / 100);
+
+                const ct = document.getElementById('test-ct').value;
+                if (ct) command.ct = parseInt(ct);
+
+                const transition = document.getElementById('test-transition').value;
+                if (transition !== '0') command.transitiontime = parseInt(transition);
+            }
+
+            try {
+                const res = await fetch(`${API}/api/lights/${lightId}/state`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(command)
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Kommando skickat', 'success');
+                } else {
+                    showToast('Misslyckades', 'error');
+                }
+            } catch (e) {
+                showToast('Natveksfel', 'error');
+            }
+        }
+
+        async function blinkLight() {
+            const lightId = document.getElementById('test-light').value;
+            if (!lightId) return;
+
+            try {
+                await fetch(`${API}/api/lights/${lightId}/state`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ alert: 'lselect' })
+                });
+                showToast('Lampan blinkar i 15 sek', 'success');
+            } catch (e) {
+                showToast('Kunde inte blinka', 'error');
+            }
+        }
+
+        // Templates
+        function loadTemplate(name) {
+            const templates = {
+                wakeup: {
+                    name: 'Wake-up Light',
+                    description: 'Gradvis tackning over 15 minuter',
+                    trigger_type: 'time',
+                    time: '06:45',
+                    weekdays: [0, 1, 2, 3, 4],
+                    on: true,
+                    bri: 100,
+                    ct: '366',
+                    transition: '9000'
+                },
+                evening: {
+                    name: 'Kvallsscen',
+                    description: 'Dimmat varmt ljus vid solnedgang',
+                    trigger_type: 'sunset',
+                    offset: -15,
+                    weekdays: [0, 1, 2, 3, 4, 5, 6],
+                    on: true,
+                    bri: 60,
+                    ct: '454',
+                    transition: '100'
+                },
+                goodnight: {
+                    name: 'Godnatt',
+                    description: 'Slack alla lampor kl 22:00',
+                    trigger_type: 'time',
+                    time: '22:00',
+                    weekdays: [0, 1, 2, 3, 4],
+                    on: false,
+                    transition: '100'
+                },
+                arrival: {
+                    name: 'Hemkomst',
+                    description: 'Tand vid solnedgang',
+                    trigger_type: 'sunset',
+                    offset: 0,
+                    weekdays: [0, 1, 2, 3, 4, 5, 6],
+                    on: true,
+                    bri: 80,
+                    ct: '366',
+                    transition: '50'
+                }
+            };
+
+            const t = templates[name];
+            if (!t) return;
+
+            // Switch to create tab
+            document.querySelector('[data-tab="create"]').click();
+
+            // Fill form
+            document.getElementById('auto-name').value = t.name;
+            document.getElementById('auto-desc').value = t.description;
+            document.getElementById('trigger-type').value = t.trigger_type;
+            document.getElementById('trigger-type').dispatchEvent(new Event('change'));
+
+            if (t.time) document.getElementById('trigger-time').value = t.time;
+            if (t.offset !== undefined) document.getElementById('trigger-offset').value = t.offset;
+
+            // Weekdays
+            document.querySelectorAll('input[name="weekday"]').forEach(cb => {
+                cb.checked = t.weekdays.includes(parseInt(cb.value));
+            });
+
+            // Action
+            document.getElementById('action-on').value = t.on ? 'true' : 'false';
+            if (t.bri !== undefined) {
+                document.getElementById('action-bri').value = t.bri;
+                document.getElementById('bri-value').textContent = t.bri + '%';
+            }
+            if (t.ct) document.getElementById('action-ct').value = t.ct;
+            if (t.transition) document.getElementById('action-transition').value = t.transition;
+
+            updatePreview();
+            showToast(`Mall "${t.name}" laddad`, 'success');
+        }
+
+        // Toast
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        // Initialize
+        loadData();
+        updatePreview();
+    </script>
+</body>
+</html>

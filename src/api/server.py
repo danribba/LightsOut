@@ -46,6 +46,11 @@ def create_api(
         """Redirect to main dashboard."""
         return redirect("/")
 
+    @app.route("/automations")
+    def automations_page():
+        """Serve automations builder page."""
+        return send_from_directory(STATIC_DIR, "automations.html")
+
     @app.route("/api/status", methods=["GET"])
     def get_status():
         """Get overall system status."""
@@ -215,6 +220,199 @@ def create_api(
     def health_check():
         """Simple health check endpoint."""
         return jsonify({"status": "ok", "timestamp": datetime.now().isoformat()})
+
+    # ===== Automation Endpoints =====
+
+    @app.route("/api/automations", methods=["GET"])
+    def get_automations():
+        """Get all automations."""
+        automations = database.get_all_automations()
+        return jsonify({
+            "count": len(automations),
+            "automations": [a.to_dict() for a in automations],
+        })
+
+    @app.route("/api/automations/<int:automation_id>", methods=["GET"])
+    def get_automation(automation_id):
+        """Get a single automation."""
+        automation = database.get_automation(automation_id)
+        if not automation:
+            return jsonify({"error": "Automation not found"}), 404
+        return jsonify(automation.to_dict())
+
+    @app.route("/api/automations", methods=["POST"])
+    def create_automation():
+        """
+        Create a new automation.
+
+        Expected JSON body:
+        {
+            "name": "Wake up Hugo",
+            "description": "Gradvis väckning",
+            "trigger_type": "time",
+            "trigger_config": {"time": "06:45", "weekdays": [1,2,3,4,5]},
+            "target_type": "light",
+            "target_ids": ["5", "6", "7"],
+            "action_config": {"on": true, "bri": 254, "transitiontime": 6000}
+        }
+        """
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        required = ["name", "trigger_type", "trigger_config", "target_type", "target_ids", "action_config"]
+        for field in required:
+            if field not in data:
+                return jsonify({"error": f"Missing field: {field}"}), 400
+
+        automation = database.create_automation(
+            name=data["name"],
+            description=data.get("description", ""),
+            trigger_type=data["trigger_type"],
+            trigger_config=data["trigger_config"],
+            target_type=data["target_type"],
+            target_ids=data["target_ids"],
+            action_config=data["action_config"],
+        )
+
+        return jsonify(automation.to_dict()), 201
+
+    @app.route("/api/automations/<int:automation_id>", methods=["PUT"])
+    def update_automation(automation_id):
+        """Update an existing automation."""
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        automation = database.update_automation(automation_id, **data)
+        if not automation:
+            return jsonify({"error": "Automation not found"}), 404
+
+        return jsonify(automation.to_dict())
+
+    @app.route("/api/automations/<int:automation_id>", methods=["DELETE"])
+    def delete_automation(automation_id):
+        """Delete an automation."""
+        success = database.delete_automation(automation_id)
+        if not success:
+            return jsonify({"error": "Automation not found"}), 404
+        return jsonify({"success": True})
+
+    @app.route("/api/automations/<int:automation_id>/toggle", methods=["POST"])
+    def toggle_automation(automation_id):
+        """Toggle automation enabled/disabled."""
+        automation = database.toggle_automation(automation_id)
+        if not automation:
+            return jsonify({"error": "Automation not found"}), 404
+        return jsonify(automation.to_dict())
+
+    @app.route("/api/automations/<int:automation_id>/run", methods=["POST"])
+    def run_automation(automation_id):
+        """Manually trigger an automation."""
+        automation = database.get_automation(automation_id)
+        if not automation:
+            return jsonify({"error": "Automation not found"}), 404
+
+        # Execute the automation
+        import json
+        action = json.loads(automation.action_config) if automation.action_config else {}
+        target_ids = automation.target_ids.split(",") if automation.target_ids else []
+
+        success_count = 0
+        for target_id in target_ids:
+            if automation.target_type == "light":
+                if bridge.set_light_state(target_id, **action):
+                    success_count += 1
+            elif automation.target_type == "room":
+                if bridge.set_group_state(target_id, **action):
+                    success_count += 1
+
+        # Record trigger
+        database.record_automation_trigger(automation_id)
+
+        return jsonify({
+            "success": True,
+            "automation": automation.name,
+            "targets_updated": success_count,
+            "total_targets": len(target_ids),
+        })
+
+    @app.route("/api/scenes", methods=["GET"])
+    def get_scenes():
+        """Get all Hue scenes."""
+        scenes = bridge.get_scenes()
+        return jsonify({
+            "count": len(scenes),
+            "scenes": [
+                {
+                    "id": scene_id,
+                    "name": scene_data.get("name", "Unknown"),
+                    "lights": scene_data.get("lights", []),
+                    "type": scene_data.get("type", ""),
+                }
+                for scene_id, scene_data in scenes.items()
+            ],
+        })
+
+    @app.route("/api/lights/<light_id>/state", methods=["PUT"])
+    def set_light_state(light_id):
+        """
+        Set light state directly (for testing/manual control).
+
+        JSON body can include: on, bri, hue, sat, ct, transitiontime, alert, effect, xy
+        """
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        success = bridge.set_light_state(
+            light_id,
+            on=data.get("on"),
+            brightness=data.get("bri"),
+            hue=data.get("hue"),
+            saturation=data.get("sat"),
+            color_temp=data.get("ct"),
+            transition_time=data.get("transitiontime"),
+            alert=data.get("alert"),
+            effect=data.get("effect"),
+            xy=data.get("xy"),
+        )
+
+        return jsonify({"success": success})
+
+    @app.route("/api/groups/<group_id>/state", methods=["PUT"])
+    def set_group_state(group_id):
+        """Set group/room state directly."""
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        success = bridge.set_group_state(
+            group_id,
+            on=data.get("on"),
+            brightness=data.get("bri"),
+            hue=data.get("hue"),
+            saturation=data.get("sat"),
+            color_temp=data.get("ct"),
+            transition_time=data.get("transitiontime"),
+            alert=data.get("alert"),
+            effect=data.get("effect"),
+            xy=data.get("xy"),
+            scene=data.get("scene"),
+        )
+
+        return jsonify({"success": success})
+
+    @app.route("/api/sun", methods=["GET"])
+    def get_sun_times():
+        """Get today's sunrise and sunset times."""
+        from src.automation.executor import SunCalculator
+        sun = SunCalculator()
+        return jsonify({
+            "sunrise": sun.get_sunrise().strftime("%H:%M"),
+            "sunset": sun.get_sunset().strftime("%H:%M"),
+            "date": datetime.now().strftime("%Y-%m-%d"),
+        })
 
     return app
 

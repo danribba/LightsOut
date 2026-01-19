@@ -1,5 +1,6 @@
 """SQLite database for storing light events and patterns."""
 
+import json
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
@@ -12,6 +13,7 @@ from sqlalchemy import (
     Float,
     Integer,
     String,
+    Text,
     create_engine,
     text,
 )
@@ -76,6 +78,52 @@ class DetectedPattern(Base):
     last_seen = Column(DateTime)
     created_at = Column(DateTime, default=datetime.now)
     is_active = Column(Boolean, default=True)
+
+
+class Automation(Base):
+    """Database model for user-defined automations."""
+
+    __tablename__ = "automations"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(100), nullable=False)
+    description = Column(String(500))
+
+    # Trigger configuration
+    trigger_type = Column(String(50))  # "time", "event", "sunrise", "sunset"
+    trigger_config = Column(Text)  # JSON with trigger-specific settings
+
+    # Target configuration
+    target_type = Column(String(20))  # "light", "room", "scene"
+    target_ids = Column(String(200))  # Comma-separated IDs
+
+    # Action configuration (JSON with all Hue params)
+    action_config = Column(Text)
+
+    # Status and metadata
+    is_enabled = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    last_triggered = Column(DateTime)
+    trigger_count = Column(Integer, default=0)
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for API response."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "trigger_type": self.trigger_type,
+            "trigger_config": json.loads(self.trigger_config) if self.trigger_config else {},
+            "target_type": self.target_type,
+            "target_ids": self.target_ids.split(",") if self.target_ids else [],
+            "action_config": json.loads(self.action_config) if self.action_config else {},
+            "is_enabled": self.is_enabled,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "last_triggered": self.last_triggered.isoformat() if self.last_triggered else None,
+            "trigger_count": self.trigger_count,
+        }
 
 
 class Database:
@@ -329,3 +377,155 @@ class Database:
                 "newest_event": newest.timestamp if newest else None,
                 "database_path": str(self.db_path),
             }
+
+    # ===== Automation CRUD methods =====
+
+    def get_all_automations(self) -> list[Automation]:
+        """Get all automations."""
+        with self.get_session() as session:
+            return session.query(Automation).order_by(Automation.created_at.desc()).all()
+
+    def get_automation(self, automation_id: int) -> Optional[Automation]:
+        """Get a single automation by ID."""
+        with self.get_session() as session:
+            return session.query(Automation).filter(Automation.id == automation_id).first()
+
+    def get_enabled_automations(self) -> list[Automation]:
+        """Get all enabled automations."""
+        with self.get_session() as session:
+            return (
+                session.query(Automation)
+                .filter(Automation.is_enabled == True)
+                .all()
+            )
+
+    def create_automation(
+        self,
+        name: str,
+        trigger_type: str,
+        trigger_config: dict,
+        target_type: str,
+        target_ids: list[str],
+        action_config: dict,
+        description: str = "",
+    ) -> Automation:
+        """
+        Create a new automation.
+
+        Args:
+            name: Name of the automation
+            trigger_type: Type of trigger (time, event, sunrise, sunset)
+            trigger_config: Trigger-specific configuration
+            target_type: Type of target (light, room, scene)
+            target_ids: List of target IDs
+            action_config: Hue action parameters
+            description: Optional description
+
+        Returns:
+            The created automation.
+        """
+        automation = Automation(
+            name=name,
+            description=description,
+            trigger_type=trigger_type,
+            trigger_config=json.dumps(trigger_config),
+            target_type=target_type,
+            target_ids=",".join(target_ids),
+            action_config=json.dumps(action_config),
+        )
+
+        with self.get_session() as session:
+            session.add(automation)
+            session.commit()
+            session.refresh(automation)
+            logger.info(f"Created automation: {automation.name}")
+            return automation
+
+    def update_automation(
+        self,
+        automation_id: int,
+        **kwargs,
+    ) -> Optional[Automation]:
+        """
+        Update an existing automation.
+
+        Args:
+            automation_id: ID of automation to update
+            **kwargs: Fields to update
+
+        Returns:
+            Updated automation or None if not found.
+        """
+        with self.get_session() as session:
+            automation = session.query(Automation).filter(Automation.id == automation_id).first()
+            if not automation:
+                return None
+
+            # Handle special fields
+            if "trigger_config" in kwargs and isinstance(kwargs["trigger_config"], dict):
+                kwargs["trigger_config"] = json.dumps(kwargs["trigger_config"])
+            if "action_config" in kwargs and isinstance(kwargs["action_config"], dict):
+                kwargs["action_config"] = json.dumps(kwargs["action_config"])
+            if "target_ids" in kwargs and isinstance(kwargs["target_ids"], list):
+                kwargs["target_ids"] = ",".join(kwargs["target_ids"])
+
+            for key, value in kwargs.items():
+                if hasattr(automation, key):
+                    setattr(automation, key, value)
+
+            automation.updated_at = datetime.now()
+            session.commit()
+            session.refresh(automation)
+            logger.info(f"Updated automation: {automation.name}")
+            return automation
+
+    def delete_automation(self, automation_id: int) -> bool:
+        """
+        Delete an automation.
+
+        Args:
+            automation_id: ID of automation to delete
+
+        Returns:
+            True if deleted, False if not found.
+        """
+        with self.get_session() as session:
+            automation = session.query(Automation).filter(Automation.id == automation_id).first()
+            if not automation:
+                return False
+
+            session.delete(automation)
+            session.commit()
+            logger.info(f"Deleted automation: {automation.name}")
+            return True
+
+    def toggle_automation(self, automation_id: int) -> Optional[Automation]:
+        """
+        Toggle automation enabled/disabled status.
+
+        Args:
+            automation_id: ID of automation to toggle
+
+        Returns:
+            Updated automation or None if not found.
+        """
+        with self.get_session() as session:
+            automation = session.query(Automation).filter(Automation.id == automation_id).first()
+            if not automation:
+                return None
+
+            automation.is_enabled = not automation.is_enabled
+            automation.updated_at = datetime.now()
+            session.commit()
+            session.refresh(automation)
+            logger.info(f"Toggled automation {automation.name}: {'enabled' if automation.is_enabled else 'disabled'}")
+            return automation
+
+    def record_automation_trigger(self, automation_id: int):
+        """Record that an automation was triggered."""
+        with self.get_session() as session:
+            automation = session.query(Automation).filter(Automation.id == automation_id).first()
+            if automation:
+                automation.last_triggered = datetime.now()
+                automation.trigger_count = (automation.trigger_count or 0) + 1
+                session.commit()
