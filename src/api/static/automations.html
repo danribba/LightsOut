@@ -573,6 +573,102 @@
             outline: none;
             border-color: #60a5fa;
         }
+
+        /* Adaptive lighting styles */
+        .lux-display {
+            background: #1a1a2e;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .lux-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #60a5fa;
+        }
+        .lux-bar-container {
+            height: 8px;
+            background: #333;
+            border-radius: 4px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+        .lux-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #1e3a5f, #60a5fa);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .adaptive-status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+        }
+        .status-item {
+            background: #1a1a2e;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+        .status-label {
+            display: block;
+            font-size: 0.8rem;
+            color: #888;
+            margin-bottom: 5px;
+        }
+        .status-value {
+            display: block;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #fff;
+        }
+        .status-value.running { color: #10b981; }
+        .status-value.adjusting { color: #f59e0b; }
+        .status-value.target_reached { color: #10b981; }
+        .status-value.stopped { color: #888; }
+        .status-value.error { color: #ef4444; }
+
+        .lux-comparison {
+            background: #1a1a2e;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        .lux-bar-label {
+            font-size: 0.85rem;
+            color: #888;
+            margin-bottom: 10px;
+        }
+        .lux-comparison-bar {
+            height: 20px;
+            background: linear-gradient(90deg, #1a1a2e 0%, #252550 50%, #3b82f6 100%);
+            border-radius: 4px;
+            position: relative;
+        }
+        .lux-current-marker {
+            position: absolute;
+            width: 4px;
+            height: 100%;
+            background: #10b981;
+            border-radius: 2px;
+            left: 0%;
+            transition: left 0.3s ease;
+        }
+        .lux-target-marker {
+            position: absolute;
+            width: 4px;
+            height: 100%;
+            background: #f59e0b;
+            border-radius: 2px;
+            left: 30%;
+            transition: left 0.3s ease;
+        }
+        .lux-comparison-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5px;
+            font-size: 0.75rem;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -594,6 +690,7 @@
             <button class="tab active" data-tab="list">Mina automationer</button>
             <button class="tab" data-tab="hue">Hue-automationer</button>
             <button class="tab" data-tab="edit-schedules">Redigera scheman</button>
+            <button class="tab" data-tab="adaptive">Adaptiv belysning</button>
             <button class="tab" data-tab="create">Skapa ny</button>
             <button class="tab" data-tab="templates">Mallar</button>
             <button class="tab" data-tab="test">Testa lampor</button>
@@ -651,6 +748,102 @@
                 </p>
                 <div id="editable-schedules" class="automation-list">
                     <div class="loading">Laddar...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Adaptive Lighting panel -->
+        <div id="adaptive-panel" class="panel">
+            <div class="card">
+                <h2>Adaptiv belysning</h2>
+                <p style="color: #888; margin-bottom: 20px; font-size: 0.9rem;">
+                    Justera lampors ljusstyrka automatiskt baserat på ljussensorns mätning.
+                    Välj en sensor, koppla lampor, och sätt mål-lux.
+                </p>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Ljussensor</label>
+                        <select id="adaptive-sensor">
+                            <option value="">Välj sensor...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Nuvarande ljusnivå</label>
+                        <div class="lux-display" id="current-lux-display">
+                            <span class="lux-value">-- lux</span>
+                            <div class="lux-bar-container">
+                                <div class="lux-bar" id="current-lux-bar"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Kopplade lampor</label>
+                    <div id="adaptive-lights" class="target-picker">
+                        <div class="loading">Laddar...</div>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Mål-lux: <span id="target-lux-value">150</span> lux</label>
+                        <div class="slider-group">
+                            <input type="range" id="target-lux" min="10" max="500" value="150" step="10">
+                        </div>
+                        <p class="form-hint">Typiskt: 50 (dämpad), 150 (normal), 300 (arbetsbelysning)</p>
+                    </div>
+                    <div class="form-group">
+                        <label>Max ljusstyrka: <span id="max-bri-value">100</span>%</label>
+                        <div class="slider-group">
+                            <input type="range" id="max-brightness" min="10" max="100" value="100">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="btn-group">
+                    <button class="btn btn-primary" id="btn-start-adaptive" onclick="startAdaptive()">▶ Starta test</button>
+                    <button class="btn btn-danger" id="btn-stop-adaptive" onclick="stopAdaptive()" style="display:none">⏹ Stoppa</button>
+                    <button class="btn btn-secondary" onclick="testAdaptiveOnce()">Testa en gång</button>
+                </div>
+
+                <div id="adaptive-status" class="card" style="margin-top: 20px; display: none;">
+                    <h2>Status</h2>
+                    <div class="adaptive-status-grid">
+                        <div class="status-item">
+                            <span class="status-label">Status</span>
+                            <span class="status-value" id="adaptive-status-text">--</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Aktuell lux</span>
+                            <span class="status-value" id="adaptive-current-lux">--</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Mål-lux</span>
+                            <span class="status-value" id="adaptive-target-lux">--</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Ljusstyrka</span>
+                            <span class="status-value" id="adaptive-brightness">--</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="status-label">Iterationer</span>
+                            <span class="status-value" id="adaptive-iterations">--</span>
+                        </div>
+                    </div>
+                    <div class="lux-comparison" style="margin-top: 15px;">
+                        <div class="lux-bar-label">Aktuell vs Mål</div>
+                        <div class="lux-comparison-bar">
+                            <div class="lux-current-marker" id="lux-current-marker"></div>
+                            <div class="lux-target-marker" id="lux-target-marker"></div>
+                        </div>
+                        <div class="lux-comparison-labels">
+                            <span>0</span>
+                            <span>250</span>
+                            <span>500 lux</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1832,11 +2025,245 @@
             if (e.key === 'Escape') closeEditModal();
         });
 
+        // ===== Adaptive Lighting =====
+        let adaptiveStatusInterval = null;
+        let sensorRefreshInterval = null;
+
+        async function loadLightSensors() {
+            try {
+                const res = await fetch(`${API}/api/hue/lightsensors`);
+                const data = await res.json();
+
+                const select = document.getElementById('adaptive-sensor');
+                select.innerHTML = '<option value="">Välj sensor...</option>' +
+                    data.sensors.map(s => `<option value="${s.id}">${s.name} (${s.lux} lux)</option>`).join('');
+
+            } catch (e) {
+                console.error('Failed to load light sensors:', e);
+            }
+        }
+
+        function renderAdaptiveLights() {
+            const picker = document.getElementById('adaptive-lights');
+            picker.innerHTML = lights.map(light => `
+                <div class="target-item" onclick="toggleAdaptiveLight(this, '${light.id}')">
+                    <input type="checkbox" value="${light.id}">
+                    <span>${light.name}</span>
+                </div>
+            `).join('');
+        }
+
+        function toggleAdaptiveLight(el, id) {
+            el.classList.toggle('selected');
+            el.querySelector('input').checked = el.classList.contains('selected');
+        }
+
+        function getSelectedAdaptiveLights() {
+            return Array.from(document.querySelectorAll('#adaptive-lights .target-item.selected input'))
+                .map(input => input.value);
+        }
+
+        // Slider updates
+        document.getElementById('target-lux').addEventListener('input', function() {
+            document.getElementById('target-lux-value').textContent = this.value;
+        });
+
+        document.getElementById('max-brightness').addEventListener('input', function() {
+            document.getElementById('max-bri-value').textContent = this.value;
+        });
+
+        // Sensor selection - start refreshing readings
+        document.getElementById('adaptive-sensor').addEventListener('change', function() {
+            if (this.value) {
+                startSensorRefresh();
+            } else {
+                stopSensorRefresh();
+            }
+        });
+
+        function startSensorRefresh() {
+            stopSensorRefresh();
+            refreshSensorReading();
+            sensorRefreshInterval = setInterval(refreshSensorReading, 2000);
+        }
+
+        function stopSensorRefresh() {
+            if (sensorRefreshInterval) {
+                clearInterval(sensorRefreshInterval);
+                sensorRefreshInterval = null;
+            }
+        }
+
+        async function refreshSensorReading() {
+            const sensorId = document.getElementById('adaptive-sensor').value;
+            if (!sensorId) return;
+
+            try {
+                const res = await fetch(`${API}/api/hue/lightsensors`);
+                const data = await res.json();
+                const sensor = data.sensors.find(s => s.id === sensorId);
+
+                if (sensor) {
+                    document.getElementById('current-lux-display').querySelector('.lux-value').textContent = `${sensor.lux} lux`;
+                    document.getElementById('current-lux-bar').style.width = `${Math.min(100, sensor.lux / 5)}%`;
+                }
+            } catch (e) {
+                console.error('Failed to refresh sensor:', e);
+            }
+        }
+
+        async function startAdaptive() {
+            const sensorId = document.getElementById('adaptive-sensor').value;
+            const lightIds = getSelectedAdaptiveLights();
+            const targetLux = parseInt(document.getElementById('target-lux').value);
+            const maxBri = Math.round(parseInt(document.getElementById('max-brightness').value) * 254 / 100);
+
+            if (!sensorId) {
+                showToast('Välj en sensor', 'error');
+                return;
+            }
+            if (lightIds.length === 0) {
+                showToast('Välj minst en lampa', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API}/api/adaptive/start`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sensor_id: sensorId,
+                        light_ids: lightIds,
+                        target_lux: targetLux,
+                        max_brightness: maxBri,
+                        step: 15,
+                    })
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Adaptiv belysning startad', 'success');
+                    document.getElementById('btn-start-adaptive').style.display = 'none';
+                    document.getElementById('btn-stop-adaptive').style.display = 'inline-block';
+                    document.getElementById('adaptive-status').style.display = 'block';
+
+                    // Start status polling
+                    startAdaptiveStatusPolling();
+                } else {
+                    showToast(data.error || 'Kunde inte starta', 'error');
+                }
+            } catch (e) {
+                showToast('Nätverksfel', 'error');
+            }
+        }
+
+        async function stopAdaptive() {
+            try {
+                await fetch(`${API}/api/adaptive/stop`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+
+                showToast('Stoppad', 'success');
+                document.getElementById('btn-start-adaptive').style.display = 'inline-block';
+                document.getElementById('btn-stop-adaptive').style.display = 'none';
+
+                stopAdaptiveStatusPolling();
+            } catch (e) {
+                showToast('Kunde inte stoppa', 'error');
+            }
+        }
+
+        async function testAdaptiveOnce() {
+            const sensorId = document.getElementById('adaptive-sensor').value;
+            const lightIds = getSelectedAdaptiveLights();
+            const targetLux = parseInt(document.getElementById('target-lux').value);
+
+            if (!sensorId || lightIds.length === 0) {
+                showToast('Välj sensor och lampor', 'error');
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API}/api/adaptive/test-once`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sensor_id: sensorId,
+                        light_ids: lightIds,
+                        target_lux: targetLux,
+                    })
+                });
+
+                const data = await res.json();
+                if (data.action === 'adjusted') {
+                    showToast(`Justerat: ${data.previous_brightness} → ${data.new_brightness} (${data.current_lux} lux)`, 'success');
+                } else {
+                    showToast(`Mål nått: ${data.current_lux} lux`, 'success');
+                }
+
+                // Refresh sensor reading
+                setTimeout(refreshSensorReading, 1000);
+
+            } catch (e) {
+                showToast('Fel vid test', 'error');
+            }
+        }
+
+        function startAdaptiveStatusPolling() {
+            stopAdaptiveStatusPolling();
+            updateAdaptiveStatus();
+            adaptiveStatusInterval = setInterval(updateAdaptiveStatus, 2000);
+        }
+
+        function stopAdaptiveStatusPolling() {
+            if (adaptiveStatusInterval) {
+                clearInterval(adaptiveStatusInterval);
+                adaptiveStatusInterval = null;
+            }
+        }
+
+        async function updateAdaptiveStatus() {
+            try {
+                const res = await fetch(`${API}/api/adaptive/status`);
+                const data = await res.json();
+
+                if (data.sessions && data.sessions.length > 0) {
+                    const session = data.sessions[0];
+
+                    document.getElementById('adaptive-status-text').textContent = session.status;
+                    document.getElementById('adaptive-status-text').className = `status-value ${session.status}`;
+                    document.getElementById('adaptive-current-lux').textContent = `${session.current_lux} lux`;
+                    document.getElementById('adaptive-target-lux').textContent = `${session.target_lux} lux`;
+                    document.getElementById('adaptive-brightness').textContent = `${Math.round(session.current_brightness / 254 * 100)}%`;
+                    document.getElementById('adaptive-iterations').textContent = session.iterations;
+
+                    // Update comparison bar
+                    const maxLux = 500;
+                    document.getElementById('lux-current-marker').style.left = `${Math.min(100, session.current_lux / maxLux * 100)}%`;
+                    document.getElementById('lux-target-marker').style.left = `${Math.min(100, session.target_lux / maxLux * 100)}%`;
+
+                    if (!session.active) {
+                        document.getElementById('btn-start-adaptive').style.display = 'inline-block';
+                        document.getElementById('btn-stop-adaptive').style.display = 'none';
+                        stopAdaptiveStatusPolling();
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to get adaptive status:', e);
+            }
+        }
+
         // Initialize
         loadData();
         loadHueData();
         loadEditableSchedules();
+        loadLightSensors();
         updatePreview();
+
+        // Render adaptive lights once main lights are loaded
+        setTimeout(renderAdaptiveLights, 1000);
     </script>
 </body>
 </html>

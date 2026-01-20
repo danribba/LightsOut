@@ -8,6 +8,9 @@ from typing import Optional
 from flask import Flask, jsonify, request, send_from_directory, redirect
 from flask_cors import CORS
 from loguru import logger
+import threading
+import time
+import math
 
 from src.hue.bridge import HueBridge
 from src.storage.database import Database
@@ -581,7 +584,290 @@ def create_api(
             ],
         })
 
+    # ===== Adaptive Lighting =====
+
+    # Store for active adaptive lighting sessions
+    adaptive_sessions = {}
+
+    def lightlevel_to_lux(lightlevel):
+        """Convert Hue lightlevel to lux. Formula: lux = 10^((lightlevel - 1) / 10000)"""
+        if lightlevel <= 0:
+            return 0
+        return round(10 ** ((lightlevel - 1) / 10000), 1)
+
+    def lux_to_lightlevel(lux):
+        """Convert lux to Hue lightlevel."""
+        if lux <= 0:
+            return 0
+        return int(math.log10(lux) * 10000 + 1)
+
+    @app.route("/api/hue/lightsensors", methods=["GET"])
+    def get_light_sensors():
+        """Get all ambient light sensors with current readings."""
+        sensors = bridge.get_sensors()
+        light_sensors = []
+
+        for sid, s in sensors.items():
+            if s.get("type") == "ZLLLightLevel":
+                state = s.get("state", {})
+                lightlevel = state.get("lightlevel", 0)
+                light_sensors.append({
+                    "id": sid,
+                    "name": s.get("name", "Unknown"),
+                    "lightlevel": lightlevel,
+                    "lux": lightlevel_to_lux(lightlevel),
+                    "dark": state.get("dark", False),
+                    "daylight": state.get("daylight", False),
+                    "lastupdated": state.get("lastupdated", ""),
+                })
+
+        return jsonify({
+            "count": len(light_sensors),
+            "sensors": light_sensors,
+        })
+
+    @app.route("/api/adaptive/start", methods=["POST"])
+    def start_adaptive_lighting():
+        """
+        Start adaptive lighting test.
+
+        JSON body:
+        {
+            "sensor_id": "42",
+            "light_ids": ["1", "2"],
+            "target_lux": 150,
+            "min_brightness": 1,
+            "max_brightness": 254,
+            "step": 10
+        }
+        """
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        sensor_id = data.get("sensor_id")
+        light_ids = data.get("light_ids", [])
+        target_lux = data.get("target_lux", 150)
+        min_brightness = data.get("min_brightness", 1)
+        max_brightness = data.get("max_brightness", 254)
+        step = data.get("step", 10)
+
+        if not sensor_id or not light_ids:
+            return jsonify({"error": "sensor_id and light_ids required"}), 400
+
+        session_id = f"adaptive_{sensor_id}"
+
+        # Stop existing session if any
+        if session_id in adaptive_sessions:
+            adaptive_sessions[session_id]["active"] = False
+            time.sleep(0.5)
+
+        # Create new session
+        session = {
+            "active": True,
+            "sensor_id": sensor_id,
+            "light_ids": light_ids,
+            "target_lux": target_lux,
+            "min_brightness": min_brightness,
+            "max_brightness": max_brightness,
+            "step": step,
+            "current_brightness": 0,
+            "current_lux": 0,
+            "iterations": 0,
+            "status": "starting",
+        }
+        adaptive_sessions[session_id] = session
+
+        # Start background thread
+        thread = threading.Thread(
+            target=_run_adaptive_loop,
+            args=(bridge, session_id, adaptive_sessions),
+            daemon=True,
+        )
+        thread.start()
+
+        return jsonify({
+            "success": True,
+            "session_id": session_id,
+            "message": f"Started adaptive lighting for sensor {sensor_id}",
+        })
+
+    @app.route("/api/adaptive/stop", methods=["POST"])
+    def stop_adaptive_lighting():
+        """Stop adaptive lighting test."""
+        data = request.get_json() or {}
+        session_id = data.get("session_id")
+
+        if session_id and session_id in adaptive_sessions:
+            adaptive_sessions[session_id]["active"] = False
+            adaptive_sessions[session_id]["status"] = "stopped"
+            return jsonify({"success": True, "message": "Stopped"})
+
+        # Stop all sessions
+        for sid in adaptive_sessions:
+            adaptive_sessions[sid]["active"] = False
+            adaptive_sessions[sid]["status"] = "stopped"
+
+        return jsonify({"success": True, "message": "All sessions stopped"})
+
+    @app.route("/api/adaptive/status", methods=["GET"])
+    def get_adaptive_status():
+        """Get status of all adaptive lighting sessions."""
+        # Also refresh sensor readings
+        sensors = bridge.get_sensors()
+
+        sessions_status = []
+        for session_id, session in adaptive_sessions.items():
+            # Get fresh sensor reading
+            sensor = sensors.get(session["sensor_id"], {})
+            state = sensor.get("state", {})
+            lightlevel = state.get("lightlevel", 0)
+
+            sessions_status.append({
+                "session_id": session_id,
+                "active": session["active"],
+                "sensor_id": session["sensor_id"],
+                "light_ids": session["light_ids"],
+                "target_lux": session["target_lux"],
+                "current_lux": lightlevel_to_lux(lightlevel),
+                "current_brightness": session.get("current_brightness", 0),
+                "iterations": session.get("iterations", 0),
+                "status": session.get("status", "unknown"),
+            })
+
+        return jsonify({"sessions": sessions_status})
+
+    @app.route("/api/adaptive/test-once", methods=["POST"])
+    def test_adaptive_once():
+        """
+        Run a single adaptive adjustment iteration.
+        Useful for testing without starting a continuous loop.
+        """
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        sensor_id = data.get("sensor_id")
+        light_ids = data.get("light_ids", [])
+        target_lux = data.get("target_lux", 150)
+
+        if not sensor_id or not light_ids:
+            return jsonify({"error": "sensor_id and light_ids required"}), 400
+
+        # Get current sensor reading
+        sensors = bridge.get_sensors()
+        sensor = sensors.get(sensor_id, {})
+        state = sensor.get("state", {})
+        lightlevel = state.get("lightlevel", 0)
+        current_lux = lightlevel_to_lux(lightlevel)
+
+        # Get current light brightness (use first light)
+        lights = bridge.get_all_lights()
+        first_light = lights.get(light_ids[0])
+        current_bri = first_light.brightness if first_light and first_light.is_on else 0
+
+        # Calculate adjustment
+        lux_diff = target_lux - current_lux
+
+        if abs(lux_diff) < 5:  # Close enough
+            return jsonify({
+                "action": "none",
+                "reason": "Target reached",
+                "current_lux": current_lux,
+                "target_lux": target_lux,
+                "current_brightness": current_bri,
+            })
+
+        # Estimate brightness adjustment needed
+        # Rough estimate: 10 lux ≈ 5 brightness units
+        adjustment = int(lux_diff / 2)
+        adjustment = max(-25, min(25, adjustment))  # Limit step size
+
+        new_bri = current_bri + adjustment
+        new_bri = max(1, min(254, new_bri))
+
+        # Apply to all lights
+        for light_id in light_ids:
+            bridge.set_light_state(light_id, on=True, brightness=new_bri)
+
+        return jsonify({
+            "action": "adjusted",
+            "current_lux": current_lux,
+            "target_lux": target_lux,
+            "lux_diff": lux_diff,
+            "previous_brightness": current_bri,
+            "new_brightness": new_bri,
+            "adjustment": adjustment,
+            "lights_updated": light_ids,
+        })
+
     return app
+
+
+def _run_adaptive_loop(bridge, session_id, sessions):
+    """Background thread for adaptive lighting adjustment."""
+    session = sessions.get(session_id)
+    if not session:
+        return
+
+    session["status"] = "running"
+    logger.info(f"Starting adaptive lighting loop: {session_id}")
+
+    # Give lights time to turn on initially
+    for light_id in session["light_ids"]:
+        bridge.set_light_state(light_id, on=True, brightness=session["min_brightness"])
+    time.sleep(2)
+
+    while session.get("active", False):
+        try:
+            # Get current sensor reading
+            sensors = bridge.get_sensors()
+            sensor = sensors.get(session["sensor_id"], {})
+            state = sensor.get("state", {})
+            lightlevel = state.get("lightlevel", 0)
+            current_lux = 10 ** ((lightlevel - 1) / 10000) if lightlevel > 0 else 0
+
+            session["current_lux"] = round(current_lux, 1)
+            session["iterations"] += 1
+
+            # Get current brightness from first light
+            lights = bridge.get_all_lights()
+            first_light = lights.get(session["light_ids"][0])
+            current_bri = first_light.brightness if first_light and first_light.is_on else session["min_brightness"]
+            session["current_brightness"] = current_bri
+
+            target_lux = session["target_lux"]
+            lux_diff = target_lux - current_lux
+
+            # Check if we've reached target
+            if abs(lux_diff) < 5:
+                session["status"] = "target_reached"
+                logger.info(f"Adaptive {session_id}: Target reached at {current_lux} lux, brightness {current_bri}")
+            else:
+                session["status"] = "adjusting"
+
+                # Calculate adjustment
+                adjustment = int(lux_diff / 2)
+                adjustment = max(-session["step"], min(session["step"], adjustment))
+
+                new_bri = current_bri + adjustment
+                new_bri = max(session["min_brightness"], min(session["max_brightness"], new_bri))
+
+                if new_bri != current_bri:
+                    for light_id in session["light_ids"]:
+                        bridge.set_light_state(light_id, brightness=new_bri)
+                    logger.debug(f"Adaptive {session_id}: lux={current_lux:.1f}, target={target_lux}, bri {current_bri}→{new_bri}")
+
+            # Wait before next iteration
+            time.sleep(3)
+
+        except Exception as e:
+            logger.error(f"Adaptive lighting error: {e}")
+            session["status"] = f"error: {e}"
+            time.sleep(5)
+
+    session["status"] = "stopped"
+    logger.info(f"Adaptive lighting stopped: {session_id}")
 
 
 class APIServer:
