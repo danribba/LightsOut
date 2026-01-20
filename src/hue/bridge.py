@@ -364,3 +364,153 @@ class HueBridge:
         except Exception as e:
             logger.error(f"Failed to get sensors: {e}")
             return {}
+
+    def update_schedule(self, schedule_id: str, **kwargs) -> bool:
+        """
+        Update a schedule on the bridge.
+
+        Args:
+            schedule_id: ID of the schedule to update
+            **kwargs: Fields to update (name, description, status, localtime, command)
+
+        Returns:
+            True if successful, False otherwise.
+        """
+        if not self._bridge:
+            logger.error("Not connected to bridge")
+            return False
+
+        try:
+            # Build update payload - only include provided fields
+            data = {}
+            if "name" in kwargs:
+                data["name"] = kwargs["name"]
+            if "description" in kwargs:
+                data["description"] = kwargs["description"]
+            if "status" in kwargs:
+                data["status"] = kwargs["status"]
+            if "localtime" in kwargs:
+                data["localtime"] = kwargs["localtime"]
+            if "command" in kwargs:
+                data["command"] = kwargs["command"]
+
+            if not data:
+                logger.warning("No fields to update")
+                return False
+
+            # Use phue's request method to make direct API call
+            result = self._bridge.request(
+                mode="PUT",
+                address=f"/api/{self._bridge.username}/schedules/{schedule_id}",
+                data=data,
+            )
+            logger.info(f"Updated schedule {schedule_id}: {data}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to update schedule {schedule_id}: {e}")
+            return False
+
+    def delete_schedule(self, schedule_id: str) -> bool:
+        """
+        Delete a schedule from the bridge.
+
+        Args:
+            schedule_id: ID of the schedule to delete
+
+        Returns:
+            True if successful, False otherwise.
+        """
+        if not self._bridge:
+            logger.error("Not connected to bridge")
+            return False
+
+        try:
+            self._bridge.request(
+                mode="DELETE",
+                address=f"/api/{self._bridge.username}/schedules/{schedule_id}",
+            )
+            logger.info(f"Deleted schedule {schedule_id}")
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to delete schedule {schedule_id}: {e}")
+            return False
+
+    def create_schedule(
+        self,
+        name: str,
+        command: dict,
+        localtime: str,
+        description: str = "",
+        status: str = "enabled",
+        autodelete: bool = False,
+    ) -> Optional[str]:
+        """
+        Create a new schedule on the bridge.
+
+        Args:
+            name: Name of the schedule
+            command: Command to execute (address, method, body)
+            localtime: Time specification (e.g., "W124/T07:00:00" for recurring)
+            description: Optional description
+            status: "enabled" or "disabled"
+            autodelete: Delete schedule after it runs once
+
+        Returns:
+            Schedule ID if successful, None otherwise.
+        """
+        if not self._bridge:
+            logger.error("Not connected to bridge")
+            return None
+
+        try:
+            data = {
+                "name": name,
+                "command": command,
+                "localtime": localtime,
+                "status": status,
+                "autodelete": autodelete,
+            }
+            if description:
+                data["description"] = description
+
+            result = self._bridge.request(
+                mode="POST",
+                address=f"/api/{self._bridge.username}/schedules",
+                data=data,
+            )
+            # Result format: [{"success": {"id": "1"}}]
+            if result and isinstance(result, list) and "success" in result[0]:
+                schedule_id = result[0]["success"].get("id")
+                logger.info(f"Created schedule '{name}' with ID {schedule_id}")
+                return schedule_id
+            return None
+
+        except Exception as e:
+            logger.error(f"Failed to create schedule: {e}")
+            return None
+
+    def get_schedule_details(self, schedule_id: str) -> Optional[dict]:
+        """
+        Get detailed info about a specific schedule.
+
+        Args:
+            schedule_id: ID of the schedule
+
+        Returns:
+            Schedule data dict or None if not found.
+        """
+        if not self._bridge:
+            logger.error("Not connected to bridge")
+            return None
+
+        try:
+            result = self._bridge.request(
+                mode="GET",
+                address=f"/api/{self._bridge.username}/schedules/{schedule_id}",
+            )
+            return result
+        except Exception as e:
+            logger.error(f"Failed to get schedule {schedule_id}: {e}")
+            return None

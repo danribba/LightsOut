@@ -450,6 +450,129 @@
             margin-bottom: 10px;
             color: #888;
         }
+
+        /* Modal */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        .modal-content {
+            background: #16213e;
+            border-radius: 16px;
+            padding: 30px;
+            max-width: 600px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+        .modal-header h2 {
+            margin: 0;
+            color: #fff;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 2rem;
+            cursor: pointer;
+            line-height: 1;
+            padding: 0;
+        }
+        .modal-close:hover {
+            color: #fff;
+        }
+
+        /* Fade buttons */
+        .fade-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .fade-btn {
+            min-width: 70px;
+        }
+        .fade-btn.active {
+            background: #3b82f6;
+            color: white;
+        }
+
+        /* Schedule edit item */
+        .schedule-edit-item {
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 10px;
+        }
+        .schedule-edit-item.disabled {
+            opacity: 0.5;
+        }
+        .schedule-info {
+            flex: 1;
+            min-width: 200px;
+        }
+        .schedule-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        .schedule-details {
+            color: #888;
+            font-size: 0.9rem;
+        }
+        .schedule-details span {
+            margin-right: 15px;
+        }
+        .schedule-fade {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: #252550;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+        .schedule-fade.has-fade {
+            background: #1e3a5f;
+            color: #60a5fa;
+        }
+        .schedule-actions {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .quick-fade-select {
+            padding: 8px 12px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #1a1a2e;
+            color: #fff;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .quick-fade-select:focus {
+            outline: none;
+            border-color: #60a5fa;
+        }
     </style>
 </head>
 <body>
@@ -470,6 +593,7 @@
         <div class="tabs">
             <button class="tab active" data-tab="list">Mina automationer</button>
             <button class="tab" data-tab="hue">Hue-automationer</button>
+            <button class="tab" data-tab="edit-schedules">Redigera scheman</button>
             <button class="tab" data-tab="create">Skapa ny</button>
             <button class="tab" data-tab="templates">Mallar</button>
             <button class="tab" data-tab="test">Testa lampor</button>
@@ -515,6 +639,96 @@
                 <div id="hue-sensors" class="automation-list">
                     <div class="loading">Laddar...</div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Edit Schedules panel -->
+        <div id="edit-schedules-panel" class="panel">
+            <div class="card">
+                <h2>Redigera Hue-scheman</h2>
+                <p style="color: #888; margin-bottom: 15px; font-size: 0.9rem;">
+                    Redigera befintliga scheman direkt på Hue-bryggan. Lägg till fade-in för mjukare övergångar.
+                </p>
+                <div id="editable-schedules" class="automation-list">
+                    <div class="loading">Laddar...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Edit Schedule Modal -->
+        <div id="edit-modal" class="modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Redigera schema</h2>
+                    <button class="modal-close" onclick="closeEditModal()">&times;</button>
+                </div>
+                <form id="edit-schedule-form">
+                    <input type="hidden" id="edit-schedule-id">
+
+                    <div class="form-group">
+                        <label>Namn</label>
+                        <input type="text" id="edit-name" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Beskrivning</label>
+                        <input type="text" id="edit-description">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Tid</label>
+                            <input type="time" id="edit-time">
+                        </div>
+                        <div class="form-group">
+                            <label>Status</label>
+                            <select id="edit-status">
+                                <option value="enabled">Aktiverat</option>
+                                <option value="disabled">Inaktiverat</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Dagar</label>
+                        <div class="weekday-picker" id="edit-weekdays">
+                            <label><input type="checkbox" name="edit-weekday" value="64"><span>Mån</span></label>
+                            <label><input type="checkbox" name="edit-weekday" value="32"><span>Tis</span></label>
+                            <label><input type="checkbox" name="edit-weekday" value="16"><span>Ons</span></label>
+                            <label><input type="checkbox" name="edit-weekday" value="8"><span>Tor</span></label>
+                            <label><input type="checkbox" name="edit-weekday" value="4"><span>Fre</span></label>
+                            <label><input type="checkbox" name="edit-weekday" value="2"><span>Lör</span></label>
+                            <label><input type="checkbox" name="edit-weekday" value="1"><span>Sön</span></label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Fade-in tid</label>
+                        <div class="fade-buttons">
+                            <button type="button" class="btn btn-sm btn-secondary fade-btn" data-fade="0">Ingen</button>
+                            <button type="button" class="btn btn-sm btn-secondary fade-btn" data-fade="600">1 min</button>
+                            <button type="button" class="btn btn-sm btn-secondary fade-btn" data-fade="3000">5 min</button>
+                            <button type="button" class="btn btn-sm btn-secondary fade-btn" data-fade="6000">10 min</button>
+                            <button type="button" class="btn btn-sm btn-secondary fade-btn" data-fade="9000">15 min</button>
+                        </div>
+                        <div class="slider-group" style="margin-top: 10px;">
+                            <input type="range" id="edit-transitiontime" min="0" max="18000" value="0" step="100">
+                            <span class="slider-value" id="edit-transition-value">0 sek</span>
+                        </div>
+                        <p class="form-hint">Fade-in gör att lampan gradvis tänds istället för direkt.</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Kommando (JSON)</label>
+                        <div id="edit-command-preview" class="action-preview"></div>
+                    </div>
+
+                    <div class="btn-group">
+                        <button type="submit" class="btn btn-primary">Spara ändringar</button>
+                        <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Avbryt</button>
+                        <button type="button" class="btn btn-danger" onclick="deleteCurrentSchedule()">Ta bort</button>
+                    </div>
+                </form>
             </div>
         </div>
 
@@ -1321,9 +1535,307 @@
             alert(`Regel: ${rule.name}\n\nVillkor:\n${JSON.stringify(rule.conditions, null, 2)}\n\nAktioner:\n${JSON.stringify(rule.actions, null, 2)}`);
         }
 
+        // ===== Editable Schedules =====
+        let currentEditSchedule = null;
+
+        async function loadEditableSchedules() {
+            try {
+                const res = await fetch(`${API}/api/hue/schedules`);
+                const data = await res.json();
+                renderEditableSchedules(data.schedules || []);
+            } catch (e) {
+                console.error('Failed to load schedules:', e);
+            }
+        }
+
+        function renderEditableSchedules(schedules) {
+            const el = document.getElementById('editable-schedules');
+
+            if (schedules.length === 0) {
+                el.innerHTML = '<div class="empty-state"><p>Inga scheman hittade på Hue-bryggan.</p></div>';
+                return;
+            }
+
+            el.innerHTML = schedules.map(s => {
+                const timeDisplay = parseHueTime(s.localtime);
+                const statusClass = s.status === 'enabled' ? '' : 'disabled';
+                const fadeTime = getTransitionTime(s.command);
+                const fadeDisplay = formatFadeTime(fadeTime);
+                const hasFade = fadeTime > 0;
+
+                return `
+                    <div class="schedule-edit-item ${statusClass}" data-id="${s.id}">
+                        <div class="schedule-info">
+                            <div class="schedule-name">${s.name}</div>
+                            <div class="schedule-details">
+                                <span>${timeDisplay}</span>
+                                <span class="schedule-fade ${hasFade ? 'has-fade' : ''}">
+                                    Fade: ${fadeDisplay}
+                                </span>
+                                <span>${s.status === 'enabled' ? 'Aktiv' : 'Inaktiv'}</span>
+                            </div>
+                        </div>
+                        <div class="schedule-actions">
+                            <select class="quick-fade-select" onchange="quickSetFade('${s.id}', this.value)" title="Snabbval fade-in">
+                                <option value="">+ Fade</option>
+                                <option value="0">Ingen fade</option>
+                                <option value="600">1 min</option>
+                                <option value="3000">5 min</option>
+                                <option value="6000">10 min</option>
+                                <option value="9000">15 min</option>
+                            </select>
+                            <button class="btn btn-sm btn-secondary" onclick="openEditModal('${s.id}')">Redigera</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function getTransitionTime(command) {
+            if (!command || !command.body) return 0;
+            return command.body.transitiontime || 0;
+        }
+
+        function formatFadeTime(tenthsOfSeconds) {
+            if (!tenthsOfSeconds || tenthsOfSeconds === 0) return 'Ingen';
+            const seconds = tenthsOfSeconds / 10;
+            if (seconds < 60) return `${seconds} sek`;
+            const minutes = Math.round(seconds / 60);
+            return `${minutes} min`;
+        }
+
+        async function quickSetFade(scheduleId, fadeValue) {
+            if (fadeValue === '') return;
+
+            const transitiontime = parseInt(fadeValue);
+
+            try {
+                // Get current schedule to update its command
+                const res = await fetch(`${API}/api/hue/schedules/${scheduleId}`);
+                const schedule = await res.json();
+
+                if (!schedule.command) {
+                    showToast('Schemat har inget kommando', 'error');
+                    return;
+                }
+
+                const command = { ...schedule.command };
+                command.body = { ...(command.body || {}), transitiontime };
+
+                const updateRes = await fetch(`${API}/api/hue/schedules/${scheduleId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command })
+                });
+
+                if (updateRes.ok) {
+                    showToast(`Fade satt till ${formatFadeTime(transitiontime)}`, 'success');
+                    loadEditableSchedules();
+                    loadHueData(); // Refresh the Hue tab too
+                } else {
+                    showToast('Kunde inte uppdatera', 'error');
+                }
+            } catch (e) {
+                console.error('Failed to set fade:', e);
+                showToast('Fel vid uppdatering', 'error');
+            }
+
+            // Reset dropdown
+            event.target.value = '';
+        }
+
+        async function openEditModal(scheduleId) {
+            try {
+                const res = await fetch(`${API}/api/hue/schedules/${scheduleId}`);
+                const schedule = await res.json();
+                currentEditSchedule = { id: scheduleId, ...schedule };
+
+                // Populate form
+                document.getElementById('edit-schedule-id').value = scheduleId;
+                document.getElementById('edit-name').value = schedule.name || '';
+                document.getElementById('edit-description').value = schedule.description || '';
+                document.getElementById('edit-status').value = schedule.status || 'enabled';
+
+                // Parse time and weekdays from localtime
+                const { time, weekmask } = parseLocaltimeForEdit(schedule.localtime);
+                document.getElementById('edit-time').value = time;
+
+                // Set weekday checkboxes
+                document.querySelectorAll('input[name="edit-weekday"]').forEach(cb => {
+                    const val = parseInt(cb.value);
+                    cb.checked = (weekmask & val) !== 0;
+                });
+
+                // Set transition time
+                const transitiontime = getTransitionTime(schedule.command);
+                document.getElementById('edit-transitiontime').value = transitiontime;
+                updateTransitionDisplay(transitiontime);
+
+                // Update fade button states
+                document.querySelectorAll('.fade-btn').forEach(btn => {
+                    btn.classList.toggle('active', parseInt(btn.dataset.fade) === transitiontime);
+                });
+
+                // Show command preview
+                document.getElementById('edit-command-preview').textContent =
+                    JSON.stringify(schedule.command, null, 2);
+
+                // Show modal
+                document.getElementById('edit-modal').style.display = 'flex';
+            } catch (e) {
+                console.error('Failed to load schedule:', e);
+                showToast('Kunde inte ladda schemat', 'error');
+            }
+        }
+
+        function closeEditModal() {
+            document.getElementById('edit-modal').style.display = 'none';
+            currentEditSchedule = null;
+        }
+
+        function parseLocaltimeForEdit(localtime) {
+            let time = '07:00';
+            let weekmask = 127; // All days
+
+            if (!localtime) return { time, weekmask };
+
+            // Handle W124/T07:00:00 format
+            if (localtime.startsWith('W')) {
+                const match = localtime.match(/W(\d+)\/T(\d{2}:\d{2})/);
+                if (match) {
+                    weekmask = parseInt(match[1]);
+                    time = match[2];
+                }
+            } else if (localtime.includes('T')) {
+                const match = localtime.match(/T(\d{2}:\d{2})/);
+                if (match) time = match[1];
+            }
+
+            return { time, weekmask };
+        }
+
+        function buildLocaltime(time, weekmask) {
+            if (weekmask === 0) weekmask = 127; // Default to all days
+            return `W${weekmask}/T${time}:00`;
+        }
+
+        function updateTransitionDisplay(value) {
+            const display = document.getElementById('edit-transition-value');
+            display.textContent = formatFadeTime(value);
+        }
+
+        // Transition slider event
+        document.getElementById('edit-transitiontime').addEventListener('input', function() {
+            updateTransitionDisplay(parseInt(this.value));
+            // Update button states
+            document.querySelectorAll('.fade-btn').forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.dataset.fade) === parseInt(this.value));
+            });
+        });
+
+        // Fade button clicks
+        document.querySelectorAll('.fade-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const fadeValue = parseInt(this.dataset.fade);
+                document.getElementById('edit-transitiontime').value = fadeValue;
+                updateTransitionDisplay(fadeValue);
+
+                document.querySelectorAll('.fade-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+            });
+        });
+
+        // Edit form submit
+        document.getElementById('edit-schedule-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const scheduleId = document.getElementById('edit-schedule-id').value;
+            const name = document.getElementById('edit-name').value;
+            const description = document.getElementById('edit-description').value;
+            const status = document.getElementById('edit-status').value;
+            const time = document.getElementById('edit-time').value;
+            const transitiontime = parseInt(document.getElementById('edit-transitiontime').value);
+
+            // Calculate weekmask
+            let weekmask = 0;
+            document.querySelectorAll('input[name="edit-weekday"]:checked').forEach(cb => {
+                weekmask += parseInt(cb.value);
+            });
+
+            const localtime = buildLocaltime(time, weekmask);
+
+            // Build updated command with transitiontime
+            let command = currentEditSchedule?.command || {};
+            if (command.body) {
+                command = { ...command, body: { ...command.body, transitiontime } };
+            }
+
+            try {
+                const res = await fetch(`${API}/api/hue/schedules/${scheduleId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name,
+                        description,
+                        status,
+                        localtime,
+                        command
+                    })
+                });
+
+                if (res.ok) {
+                    showToast('Schema uppdaterat!', 'success');
+                    closeEditModal();
+                    loadEditableSchedules();
+                    loadHueData();
+                } else {
+                    const err = await res.json();
+                    showToast(err.error || 'Kunde inte spara', 'error');
+                }
+            } catch (e) {
+                console.error('Failed to save:', e);
+                showToast('Nätverksfel', 'error');
+            }
+        });
+
+        async function deleteCurrentSchedule() {
+            if (!currentEditSchedule) return;
+
+            const confirmed = confirm(`Vill du verkligen ta bort schemat "${currentEditSchedule.name}"?\n\nDetta kan inte ångras.`);
+            if (!confirmed) return;
+
+            try {
+                const res = await fetch(`${API}/api/hue/schedules/${currentEditSchedule.id}`, {
+                    method: 'DELETE'
+                });
+
+                if (res.ok) {
+                    showToast('Schema borttaget', 'success');
+                    closeEditModal();
+                    loadEditableSchedules();
+                    loadHueData();
+                } else {
+                    showToast('Kunde inte ta bort', 'error');
+                }
+            } catch (e) {
+                showToast('Nätverksfel', 'error');
+            }
+        }
+
+        // Close modal on background click
+        document.getElementById('edit-modal').addEventListener('click', function(e) {
+            if (e.target === this) closeEditModal();
+        });
+
+        // Close modal on Escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeEditModal();
+        });
+
         // Initialize
         loadData();
         loadHueData();
+        loadEditableSchedules();
         updatePreview();
     </script>
 </body>

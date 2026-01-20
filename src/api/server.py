@@ -450,6 +450,95 @@ def create_api(
             ],
         })
 
+    @app.route("/api/hue/schedules/<schedule_id>", methods=["GET"])
+    def get_hue_schedule(schedule_id):
+        """Get a specific schedule from Hue bridge."""
+        schedule = bridge.get_schedule_details(schedule_id)
+        if not schedule:
+            return jsonify({"error": "Schedule not found"}), 404
+        return jsonify({
+            "id": schedule_id,
+            **schedule,
+        })
+
+    @app.route("/api/hue/schedules/<schedule_id>", methods=["PUT"])
+    def update_hue_schedule(schedule_id):
+        """
+        Update a schedule on the Hue bridge.
+
+        JSON body can include: name, description, status, localtime, command
+        """
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        # If updating command and transitiontime is provided, merge it
+        if "transitiontime" in data and "command" not in data:
+            # Get existing schedule to merge transitiontime into command
+            existing = bridge.get_schedule_details(schedule_id)
+            if existing and "command" in existing:
+                command = existing["command"].copy()
+                body = command.get("body", {})
+                body["transitiontime"] = data["transitiontime"]
+                command["body"] = body
+                data["command"] = command
+            del data["transitiontime"]
+
+        success = bridge.update_schedule(schedule_id, **data)
+        if not success:
+            return jsonify({"error": "Failed to update schedule"}), 500
+
+        return jsonify({"success": True, "id": schedule_id})
+
+    @app.route("/api/hue/schedules/<schedule_id>", methods=["DELETE"])
+    def delete_hue_schedule(schedule_id):
+        """Delete a schedule from the Hue bridge."""
+        success = bridge.delete_schedule(schedule_id)
+        if not success:
+            return jsonify({"error": "Failed to delete schedule"}), 500
+        return jsonify({"success": True})
+
+    @app.route("/api/hue/schedules", methods=["POST"])
+    def create_hue_schedule():
+        """
+        Create a new schedule on the Hue bridge.
+
+        Required JSON body:
+        {
+            "name": "Schedule name",
+            "command": {
+                "address": "/api/<user>/lights/1/state",
+                "method": "PUT",
+                "body": {"on": true, "bri": 254}
+            },
+            "localtime": "W124/T07:00:00"
+        }
+
+        Optional: description, status, autodelete
+        """
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        required = ["name", "command", "localtime"]
+        for field in required:
+            if field not in data:
+                return jsonify({"error": f"Missing field: {field}"}), 400
+
+        schedule_id = bridge.create_schedule(
+            name=data["name"],
+            command=data["command"],
+            localtime=data["localtime"],
+            description=data.get("description", ""),
+            status=data.get("status", "enabled"),
+            autodelete=data.get("autodelete", False),
+        )
+
+        if not schedule_id:
+            return jsonify({"error": "Failed to create schedule"}), 500
+
+        return jsonify({"success": True, "id": schedule_id}), 201
+
     @app.route("/api/hue/rules", methods=["GET"])
     def get_hue_rules():
         """Get all rules from Hue bridge."""
